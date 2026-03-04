@@ -1,0 +1,13 @@
+# Python
+__pycache__/
+*.pyc
+.env
+veribias.db
+
+# Node
+node_modules/
+dist/
+build/
+
+# Mac
+.DS_Store

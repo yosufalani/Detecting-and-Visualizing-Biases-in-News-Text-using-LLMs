@@ -1,0 +1,5 @@
+{
+  "name": "VeriBias: News Analysis Hub",
+  "description": "An advanced news article bias detector using Gemini AI to identify political leanings, sensationalism, and linguistic framing in journalism. Includes persistent history and trend statistics.",
+  "requestFramePermissions": []
+}
