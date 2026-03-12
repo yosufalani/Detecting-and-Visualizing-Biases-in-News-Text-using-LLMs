@@ -76,51 +76,21 @@ def analyze_text():
             return jsonify({"error": "No text provided"}), 400
 
         prompt = f"""
-You are a media bias analysis engine.
+Evaluate POLITICAL FRAMING BIAS (1-5 scale).
 
-VALUATION RUBRIC FOR THE 10 BIASES:
-Evaluate and score exactly these 10 biases on a scale of 0–100.
+1 = Neutral
+2 = Mild
+3 = Moderate
+4 = Strong
+5 = Extreme
 
-1. Framing – Narrative structure, loaded adjectives.
-2. Negativity – Focus on disaster/conflict over neutral facts.
-3. Confirmation – Only citing one worldview.
-4. Anchoring – Extreme framing early in text.
-5. Attribution – Blame/credit distortion.
-6. Selection – Cherry-picked quotes or statistics.
-7. Sensationalism – Emotional exaggeration.
-8. False Balance – Giving fringe equal weight.
-9. Omission – Missing key context/stakeholders.
-10. In-group/Out-group – Tribal language.
-
-STRICT RULES:
-- Return ONLY valid JSON.
-- No markdown.
-- No explanation.
-- No commentary.
-- No trailing commas.
-
-JSON STRUCTURE:
+Return JSON only:
 
 {{
-  "summary": "Concise professional summary.",
-  "biasScore": number,
-  "category": "Far Left | Left | Center | Right | Far Right",
-  "sensationalismScore": number,
-  "tonality": "Short tone description",
-  "biasedPhrases": [
-    {{
-      "phrase": "",
-      "reason": "",
-      "suggestedAlternative": ""
-    }}
-  ],
-  "detailedBiases": [
-    {{
-      "type": "Framing",
-      "presenceScore": number,
-      "evidence": ""
-    }}
-  ]
+  "score": integer,
+  "reasoning": string (max 30 words),
+  "highlighted_phrases": [string],
+  "confidence": integer
 }}
 
 Article Title: {title}
@@ -128,13 +98,14 @@ Article Text: {text}
 """
 
         response = client.models.generate_content(
-            model="gemini-2.5-flash",
-            contents=prompt,
-            config={
-                "response_mime_type": "application/json"
-            }
-        )
-
+    model="gemini-2.5-flash",
+    contents=prompt,
+    config={
+        "temperature": 0.0,
+        "top_p": 0.0,
+        "response_mime_type": "application/json"
+    }
+)
         raw = response.text.strip()
 
         # ---- Robust JSON Extraction ----
@@ -146,7 +117,19 @@ Article Text: {text}
             cleaned = raw[start:end]
             result_json = json.loads(cleaned)
 
-        return jsonify(result_json)
+        mapped_response = {
+    "summary": result_json.get("reasoning", ""),
+    "biasScore": 0,  # alignment neutral
+    "framingScore": result_json.get("score", 1),
+    "category": "Political Framing Bias",
+    "sensationalismScore": 0,
+    "tonality": "Neutral",
+    "biasedPhrases": result_json.get("highlighted_phrases", []),
+    "originalTextSnippet": text[:500],
+    "detailedBiases": []
+}
+
+        return jsonify(mapped_response)
 
     except Exception as e:
         print("ANALYZE ERROR:", e)
