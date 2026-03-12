@@ -1,5 +1,4 @@
-
-export type BiasCategory = 'Far Left' | 'Left' | 'Center' | 'Right' | 'Far Right';
+export type BiasCategory = 'Far Left' | 'Left' | 'Center-Left' | 'Center' | 'Center-Right' | 'Right' | 'Far Right';
 
 export interface BiasedPhrase {
   phrase: string;
@@ -11,6 +10,8 @@ export interface BiasDetail {
   type: string;
   presenceScore: number; // 0 to 100
   evidence: string;
+  confidence?: number;
+  phrases?: BiasedPhrase[];
 }
 
 export interface Highlight {
@@ -24,24 +25,25 @@ export interface AnalysisResult {
   timestamp: number;
   title: string;
   summary: string;
+
+  // biasScore now carries the real -100 to +100 political direction value
   biasScore: number;
+
+  // category now reflects actual left/right label from direction prompt
   category: string;
+
+  // direction details
+  directionLabel: string;
+  directionConfidence: number;
+
   sensationalismScore: number;
   tonality: string;
-  biasedPhrases: {
-    phrase: string;
-    reason: string;
-    suggestedAlternative: string;
-  }[];
-  detailedBiases: {
-    type: string;
-    presenceScore: number;
-    evidence: string;
-  }[];
+  biasedPhrases: BiasedPhrase[];
+  detailedBiases: BiasDetail[];
   originalTextSnippet: string;
-
-  // 🔥 NEW
   highlightedText: string;
+  framingScore: number;
+  confidence: number;
 }
 
 export interface AppState {
