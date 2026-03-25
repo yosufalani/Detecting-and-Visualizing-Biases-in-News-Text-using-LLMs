@@ -1,16 +1,17 @@
-
 import React, { useState, useEffect } from 'react';
 import { AnalysisResult } from './types';
 import { fetchHistory, deleteAnalysis, checkBackendConnection } from './services/apiService';
 import ArticleAnalyzer from './components/ArticleAnalyzer';
 import BiasDashboard from './components/BiasDashboard';
+import BiasInfoPanel from './components/BiasInfoPanel';
+import CompareView from './components/CompareView';
 import HistoryList from './components/HistoryList';
 import ResultView from './components/ResultView';
 
 const App: React.FC = () => {
   const [history, setHistory] = useState<AnalysisResult[]>([]);
   const [selectedResult, setSelectedResult] = useState<AnalysisResult | null>(null);
-  const [view, setView] = useState<'home' | 'stats'>('home');
+  const [view, setView] = useState<'home' | 'stats' | 'compare'>('home');
   const [isBackendOnline, setIsBackendOnline] = useState<boolean>(false);
 
   // Initial load and health check
@@ -109,6 +110,13 @@ const App: React.FC = () => {
               <span className="hidden sm:inline">Statistics</span>
             </button>
             <button 
+              onClick={() => setView('compare')}
+              className={`px-3 sm:px-4 py-2 rounded-lg text-sm font-semibold transition-all ${view === 'compare' ? 'bg-blue-50 text-blue-600' : 'text-gray-500 hover:text-gray-900'}`}
+            >
+              <i className="fas fa-code-branch sm:mr-2"></i>
+              <span className="hidden sm:inline">Compare</span>
+            </button>
+            <button 
               onClick={exportToCSV}
               disabled={history.length === 0}
               className="px-3 sm:px-4 py-2 rounded-lg text-sm font-semibold text-gray-500 hover:text-blue-600 hover:bg-blue-50 disabled:opacity-30 disabled:cursor-not-allowed transition-all border border-transparent hover:border-blue-100"
@@ -140,20 +148,12 @@ const App: React.FC = () => {
                   onClose={() => setSelectedResult(null)} 
                 />
               ) : (
-                <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-12 text-center h-full flex flex-col justify-center items-center">
-                  <div className="relative mb-6">
-                    <div className="absolute -inset-4 bg-blue-100 rounded-full blur-xl opacity-50 animate-pulse"></div>
-                    <i className="fas fa-file-alt text-7xl text-blue-600 relative"></i>
-                  </div>
-                  <h2 className="text-3xl font-bold text-gray-800 mb-4 serif">Transparency in Journalism</h2>
-                  <p className="text-gray-500 max-w-md mx-auto leading-relaxed">
-                    VeriBias uses advanced AI to decode the linguistic nudges that shape our public perception. 
-                    Analyze any news article to uncover hidden bias patterns.
-                  </p>
-                </div>
+                <BiasInfoPanel />
               )}
             </div>
           </div>
+        ) : view === 'compare' ? (
+          <CompareView history={history} />
         ) : (
           <div className="space-y-8">
             <div className="flex justify-between items-end">

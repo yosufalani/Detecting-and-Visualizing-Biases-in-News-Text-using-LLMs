@@ -24,15 +24,12 @@ export async function fetchHistory(): Promise<AnalysisResult[]> {
   return saved ? JSON.parse(saved) : [];
 }
 
-export async function runAnalysis(text: string, title: string): Promise<AnalysisResult> {
+export async function runAnalysis(text: string, title: string, model: "gemini" | "claude" = "gemini"): Promise<AnalysisResult> {
 
-  // 1️⃣ Call Flask backend (NOT Google directly)
   const response = await fetch(`${API_BASE}/analyze`, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ text, title }),
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ text, title, model }),
   });
 
   if (!response.ok) {

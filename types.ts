@@ -45,6 +45,7 @@ export interface AnalysisResult {
   framingScore: number;
   confidence: number;
   strengths: string[];
+  modelUsed?: string;
 }
 
 export interface AppState {

@@ -16,11 +16,20 @@ print("PYTHON PATH:", sys.executable)
 
 load_dotenv()
 api_key = os.getenv("GEMINI_API_KEY")
+claude_api_key = os.getenv("CLAUDE_API_KEY")
 
 if not api_key:
     raise ValueError("GEMINI_API_KEY not found in .env file")
 
 client = genai.Client(api_key=api_key)
+
+# Claude client — optional, only needed for Claude model selection
+try:
+    import anthropic
+    claude_client = anthropic.Anthropic(api_key=claude_api_key) if claude_api_key else None
+except ImportError:
+    claude_client = None
+    print("Warning: anthropic package not installed. Claude model unavailable.")
 
 # -------------------------
 # FLASK INIT
@@ -276,24 +285,38 @@ Article Text: {text}
 # HELPERS
 # -------------------------
 
-def run_single_prompt(bias_key: str, title: str, text: str) -> dict:
+def run_single_prompt(bias_key: str, title: str, text: str, model: str = "gemini") -> dict:
     """
-    Run one bias-specific prompt against Gemini and return the parsed result.
-    Temperature is fixed at 0 for reproducibility — same input, same output.
+    Run one bias-specific prompt against the selected LLM.
+    model: "gemini" (default) or "claude"
+    Temperature is fixed at 0 for reproducibility.
     """
     prompt = PROMPTS[bias_key]["prompt"].format(title=title, text=text)
 
-    response = client.models.generate_content(
-        model="gemini-2.5-flash",
-        contents=prompt,
-        config={
-            "temperature": 0.0,
-            "top_p": 1.0,
-            "response_mime_type": "application/json"
-        }
-    )
+    if model == "claude":
+        if not claude_client:
+            raise ValueError("Claude API key not configured. Add CLAUDE_API_KEY to .env")
 
-    raw = response.text.strip()
+        response = claude_client.messages.create(
+            model="claude-sonnet-4-6",
+            max_tokens=1024,
+            temperature=0.0,
+            messages=[{"role": "user", "content": prompt}]
+        )
+        raw = response.content[0].text.strip()
+
+    else:
+        # Default: Gemini
+        response = client.models.generate_content(
+            model="gemini-2.5-flash",
+            contents=prompt,
+            config={
+                "temperature": 0.0,
+                "top_p": 1.0,
+                "response_mime_type": "application/json"
+            }
+        )
+        raw = response.text.strip()
 
     try:
         result = json.loads(raw)
@@ -304,6 +327,7 @@ def run_single_prompt(bias_key: str, title: str, text: str) -> dict:
 
     result["bias_type"] = PROMPTS[bias_key]["name"]
     result["bias_key"] = bias_key
+    result["model_used"] = "Claude" if model == "claude" else "Gemini"
     return result
 
 
@@ -372,6 +396,7 @@ def analyze_text():
         data = request.get_json()
         text = data.get("text", "").strip()
         title = data.get("title", "Untitled Article")
+        model = data.get("model", "gemini")  # "gemini" or "claude"
 
         if not text:
             return jsonify({"error": "No text provided"}), 400
@@ -391,7 +416,7 @@ def analyze_text():
         for bias_key in valid_biases:
             try:
                 print(f"Running prompt: {bias_key}")
-                results[bias_key] = run_single_prompt(bias_key, title, text)
+                results[bias_key] = run_single_prompt(bias_key, title, text, model)
                 time.sleep(0.5)
             except Exception as e:
                 print(f"Error on {bias_key}: {e}")
@@ -479,6 +504,7 @@ def analyze_text():
             "originalTextSnippet": text[:500],
             "highlightedText":     highlighted,
             "strengths":           strengths,
+            "modelUsed":           "Claude" if model == "claude" else "Gemini",
         }
 
         return jsonify(mapped_response)

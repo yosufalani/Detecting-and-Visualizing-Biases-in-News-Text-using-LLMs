@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { runAnalysis } from '../services/apiService';
 import { AnalysisResult } from '../types';
@@ -7,26 +6,28 @@ interface ArticleAnalyzerProps {
   onResult: (result: AnalysisResult) => void;
 }
 
+type Model = "gemini" | "claude";
+
 const ArticleAnalyzer: React.FC<ArticleAnalyzerProps> = ({ onResult }) => {
-  const [title, setTitle] = useState('');
+  const [title,   setTitle]   = useState('');
   const [content, setContent] = useState('');
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+  const [error,   setError]   = useState('');
+  const [model,   setModel]   = useState<Model>('gemini');
 
   const handleAnalyze = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!content.trim()) return;
-
     setLoading(true);
     setError('');
     try {
-      const result = await runAnalysis(content, title || 'Scanned Article');
+      const result = await runAnalysis(content, title || 'Untitled Article', model);
       onResult(result);
       setTitle('');
       setContent('');
     } catch (err) {
       console.error(err);
-      setError('Analysis failed. Check your API key or Backend status.');
+      setError('Analysis failed. Check your API key or backend status.');
     } finally {
       setLoading(false);
     }
@@ -34,6 +35,8 @@ const ArticleAnalyzer: React.FC<ArticleAnalyzerProps> = ({ onResult }) => {
 
   return (
     <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
+
+      {/* Header */}
       <div className="p-6 bg-slate-900 text-white">
         <h2 className="text-xl font-bold flex items-center gap-2">
           <i className="fas fa-microscope text-blue-400"></i>
@@ -42,9 +45,34 @@ const ArticleAnalyzer: React.FC<ArticleAnalyzerProps> = ({ onResult }) => {
         <p className="text-slate-400 text-sm mt-1">Paste article text below to detect bias</p>
       </div>
 
-      <form onSubmit={handleAnalyze} className="p-6 space-y-4">
+      <div className="p-6 space-y-4">
+
+        {/* Model selector — two clean tabs */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Article Title (Optional)</label>
+          <label className="block text-sm font-medium text-gray-700 mb-2">Model</label>
+          <div className="flex rounded-lg border border-gray-200 overflow-hidden">
+            {(["gemini", "claude"] as Model[]).map((m) => (
+              <button
+                key={m}
+                type="button"
+                onClick={() => setModel(m)}
+                className={`flex-1 py-2 text-sm font-medium transition-colors ${
+                  model === m
+                    ? 'bg-slate-900 text-white'
+                    : 'bg-white text-gray-500 hover:bg-gray-50'
+                }`}
+              >
+                {m === 'gemini' ? 'Gemini 2.5 Flash' : 'Claude Sonnet'}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Title */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            Article Title <span className="text-gray-400 font-normal">(optional)</span>
+          </label>
           <input
             type="text"
             value={title}
@@ -54,6 +82,7 @@ const ArticleAnalyzer: React.FC<ArticleAnalyzerProps> = ({ onResult }) => {
           />
         </div>
 
+        {/* Content */}
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">Article Content</label>
           <textarea
@@ -65,33 +94,39 @@ const ArticleAnalyzer: React.FC<ArticleAnalyzerProps> = ({ onResult }) => {
           />
         </div>
 
+        {/* Error */}
         {error && (
           <div className="p-3 bg-red-50 text-red-600 rounded-lg text-sm flex items-center gap-2">
-            <i className="fas fa-exclamation-circle"></i>
+            <i className="fas fa-exclamation-circle" />
             {error}
           </div>
         )}
 
+        {/* Submit */}
         <button
-          type="submit"
-          disabled={loading}
+          type="button"
+          onClick={handleAnalyze}
+          disabled={loading || !content.trim()}
           className={`w-full py-3 px-4 rounded-lg font-bold text-white transition-all flex items-center justify-center gap-2 ${
-            loading ? 'bg-gray-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700 active:scale-[0.98]'
+            loading || !content.trim()
+              ? 'bg-gray-300 cursor-not-allowed'
+              : 'bg-blue-600 hover:bg-blue-700 active:scale-[0.98]'
           }`}
         >
           {loading ? (
             <>
-              <i className="fas fa-spinner fa-spin"></i>
-              Analyzing...
+              <i className="fas fa-spinner fa-spin" />
+              Analysing with {model === 'gemini' ? 'Gemini' : 'Claude'}...
             </>
           ) : (
             <>
-              <i className="fas fa-bolt"></i>
-              Run Deep Analysis
+              <i className="fas fa-bolt" />
+              Run Analysis
             </>
           )}
         </button>
-      </form>
+
+      </div>
     </div>
   );
 };
