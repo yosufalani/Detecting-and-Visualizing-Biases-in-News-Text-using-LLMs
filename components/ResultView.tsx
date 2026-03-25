@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import { AnalysisResult } from '../types';
 import { BIAS_COLORS } from '../constants';
 
-// ── Bias type definitions shown at the bottom of every result
 const BIAS_INFO = [
   {
     key: 'political_framing',
@@ -70,20 +69,30 @@ const getFramingLabel = (score: number) => {
   return 'Extreme';
 };
 
+const getVerdict = (framingScore: number, sensationalismScore: number) => {
+  const avg = (framingScore + (sensationalismScore || 0)) / 2;
+  if (avg <= 1.5) return { label: 'Largely Neutral', color: 'bg-emerald-500', text: 'text-emerald-700', pct: 15 };
+  if (avg <= 2.5) return { label: 'Mild Bias',       color: 'bg-yellow-400',  text: 'text-yellow-700', pct: 35 };
+  if (avg <= 3.5) return { label: 'Moderate Bias',   color: 'bg-orange-400',  text: 'text-orange-700', pct: 60 };
+  if (avg <= 4.5) return { label: 'Strong Bias',     color: 'bg-rose-500',    text: 'text-rose-700',   pct: 80 };
+  return             { label: 'Extreme Bias',         color: 'bg-red-700',     text: 'text-red-800',    pct: 100 };
+};
+
 const ResultView: React.FC<ResultViewProps> = ({ result, onClose }) => {
   const [showHighlighted, setShowHighlighted] = useState(false);
-  const [selectedBias, setSelectedBias] = useState<string | null>(null);
+  const [selectedBias, setSelectedBias]       = useState<string | null>(null);
 
-  const alignmentScore = result.biasScore ?? 0;
-  const framingScore   = result.framingScore ?? 1;
-  const confidence     = result.confidence ?? 0;
+  const alignmentScore      = result.biasScore ?? 0;
+  const framingScore        = result.framingScore ?? 1;
+  const confidence          = result.confidence ?? 0;
+  const sensationalismScore = result.sensationalismScore ?? 0;
+  const strengths: string[] = (result as any).strengths ?? [];
 
-  // Normalise biasedPhrases — handles both old string[] format and new object[] format
   const phrases = (result.biasedPhrases ?? []).map((p: any) =>
-    typeof p === 'string'
-      ? { phrase: p, reason: '', suggestedAlternative: '' }
-      : p
+    typeof p === 'string' ? { phrase: p, reason: '', suggestedAlternative: '' } : p
   );
+
+  const verdict = getVerdict(framingScore, sensationalismScore);
 
   return (
     <div className="relative rounded-3xl shadow-2xl border border-white/40 overflow-hidden h-full flex flex-col backdrop-blur-xl bg-white/70">
@@ -96,123 +105,106 @@ const ResultView: React.FC<ResultViewProps> = ({ result, onClose }) => {
             Analysis Report • {new Date(result.timestamp).toLocaleString()}
           </p>
         </div>
-        <button
-          onClick={onClose}
-          className="w-10 h-10 flex items-center justify-center rounded-full bg-white/10 hover:bg-white/20 transition-colors"
-        >
+        <button onClick={onClose}
+          className="w-10 h-10 flex items-center justify-center rounded-full bg-white/10 hover:bg-white/20 transition-colors">
           ✕
         </button>
       </div>
 
       <div className="relative z-10 flex-1 overflow-y-auto p-8 space-y-10">
 
-        {/* Executive Summary */}
-        <div className="p-6 rounded-2xl border border-blue-100 bg-blue-50 shadow-sm">
-          <h4 className="text-blue-700 text-xs font-bold uppercase tracking-wider mb-2">
-            Executive Summary
-          </h4>
-          <p className="text-blue-900 leading-relaxed italic text-sm">
-            "{result.summary}"
-          </p>
-        </div>
+        {/* ── 1. SYSTEMATIC OVERVIEW ──────────────────────────────── */}
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
 
-        {/* Metrics */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="px-6 pt-5 pb-3 border-b border-gray-100">
+            <h3 className="text-xs font-bold uppercase tracking-wider text-gray-400">Overall Assessment</h3>
+          </div>
 
-          {/* Framing Intensity */}
-          <div className={`p-6 rounded-3xl border shadow-sm ${getBiasColorClass(framingScore)}`}>
-            <div className="flex justify-between items-start">
-              <span className="text-xs font-bold uppercase tracking-widest opacity-70">
-                Framing Intensity
-              </span>
-              {confidence > 0 && (
-                <span className="text-xs opacity-60 font-medium">
-                  {confidence}% confidence
-                </span>
-              )}
+          {/* Verdict bar */}
+          <div className="px-6 py-4">
+            <div className="flex items-center justify-between mb-2">
+              <span className={`text-sm font-bold ${verdict.text}`}>{verdict.label}</span>
+              {confidence > 0 && <span className="text-xs text-gray-400">{confidence}% confidence</span>}
             </div>
-
-            <div className="mt-4 flex items-center justify-between">
-              <div className="text-3xl font-black">{framingScore}/5</div>
-              <div className="text-sm font-bold uppercase tracking-widest">
-                {getFramingLabel(framingScore)}
-              </div>
-            </div>
-
-            <div className="mt-6 h-2 bg-white/40 rounded-full overflow-hidden">
-              <div
-                className="h-full bg-current transition-all duration-700"
-                style={{ width: `${(framingScore / 5) * 100}%` }}
-              />
+            <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+              <div className={`h-full ${verdict.color} transition-all duration-700 rounded-full`}
+                   style={{ width: `${verdict.pct}%` }} />
             </div>
           </div>
 
-          {/* Political Alignment */}
-          <div className="p-6 bg-white rounded-3xl border border-gray-100 shadow-sm">
-            <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">
-              Political Alignment
-            </span>
-
-            <div className="mt-4 flex items-center justify-between">
-              <div
-                className="text-2xl font-black italic uppercase tracking-tight"
-                style={{ color: BIAS_COLORS[result.category as keyof typeof BIAS_COLORS] ?? '#6b7280' }}
-              >
-                {result.category}
-              </div>
-            </div>
-
-            {/* Alignment Slider */}
-            <div className="mt-6">
-              <div className="relative h-3 rounded-full overflow-hidden shadow-inner">
-                <div className="absolute inset-0 bg-gradient-to-r from-blue-700 via-gray-200 to-red-700" />
-                <div
-                  className="absolute top-1/2 -translate-y-1/2 transition-all duration-700 ease-out"
-                  style={{ left: `calc(${((alignmentScore + 100) / 200) * 100}% - 12px)` }}
-                >
-                  <div className="w-6 h-6 bg-white border-4 border-gray-900 rounded-full shadow-lg" />
+          {/* 4-metric grid */}
+          <div className="grid grid-cols-4 divide-x divide-gray-100 border-t border-gray-100 text-center">
+            {[
+              { label: 'Framing',        value: `${framingScore}/5`,        sub: getFramingLabel(framingScore),        hexColor: null, scoreColor: framingScore >= 4 ? '#e11d48' : framingScore >= 3 ? '#d97706' : '#059669' },
+              { label: 'Direction',      value: result.category ?? 'Center', sub: alignmentScore === 0 ? 'Neutral' : alignmentScore > 0 ? 'Right lean' : 'Left lean', hexColor: BIAS_COLORS[result.category as keyof typeof BIAS_COLORS] ?? '#6b7280', scoreColor: null },
+              { label: 'Sensationalism', value: `${sensationalismScore}/5`,  sub: getFramingLabel(sensationalismScore), hexColor: null, scoreColor: sensationalismScore >= 4 ? '#e11d48' : sensationalismScore >= 3 ? '#d97706' : '#059669' },
+              { label: 'Flagged',        value: `${phrases.length}`,         sub: phrases.length === 1 ? 'phrase' : 'phrases', hexColor: null, scoreColor: phrases.length >= 5 ? '#e11d48' : phrases.length >= 2 ? '#d97706' : '#059669' },
+            ].map((m, i) => (
+              <div key={i} className="px-3 py-4">
+                <div className="text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-1">{m.label}</div>
+                <div className="text-base font-black leading-tight"
+                     style={{ color: m.hexColor ?? m.scoreColor ?? '#111' }}>
+                  {m.value}
                 </div>
+                <div className="text-[10px] text-gray-400 mt-0.5">{m.sub}</div>
               </div>
-              <div className="flex justify-between mt-3 text-[10px] font-black uppercase text-gray-400">
-                <span>Far Left</span>
-                <span>Center</span>
-                <span>Far Right</span>
-              </div>
-            </div>
+            ))}
+          </div>
+
+          {/* AI Summary */}
+          <div className="px-6 py-4 bg-blue-50 border-t border-blue-100">
+            <div className="text-[10px] font-bold uppercase tracking-wider text-blue-500 mb-1">AI Summary</div>
+            <p className="text-blue-900 text-sm italic leading-relaxed">"{result.summary}"</p>
           </div>
         </div>
 
-        {/* Biased Phrases */}
+        {/* ── 2. FLAGGED PHRASES ──────────────────────────────────── */}
         <div>
-          <h3 className="text-lg font-bold text-gray-800 mb-4">
-            Framing &amp; Biased Phrasing
-          </h3>
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-bold text-gray-800">Flagged Phrases</h3>
+            <span className="text-xs text-gray-400 bg-gray-100 px-2 py-1 rounded-full font-medium">
+              {phrases.length} found
+            </span>
+          </div>
 
           {phrases.length > 0 ? (
-            <div className="space-y-4">
+            <div className="space-y-3">
               {phrases.map((phrase, idx) => (
-                <div
-                  key={idx}
-                  className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5"
-                >
-                  {/* The flagged phrase */}
-                  <div className="font-bold text-gray-900 italic mb-2">
-                    "{phrase.phrase}"
+                <div key={idx} className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+
+                  {/* Phrase row */}
+                  <div className="px-5 pt-4 pb-3 border-b border-gray-50 flex items-start gap-3">
+                    <span className="shrink-0 w-6 h-6 rounded-full bg-rose-100 text-rose-600 text-[11px] font-bold flex items-center justify-center mt-0.5">
+                      {idx + 1}
+                    </span>
+                    <div className="min-w-0">
+                      <div className="text-[10px] font-bold uppercase tracking-wider text-rose-500 mb-1">Biased phrase</div>
+                      <div className="font-semibold text-gray-900 text-sm break-words">"{phrase.phrase}"</div>
+                    </div>
                   </div>
 
-                  {/* Why it's biased */}
-                  {phrase.reason && (
-                    <div className="text-sm text-gray-500 mb-2">
-                      {phrase.reason}
-                    </div>
-                  )}
-
-                  {/* Neutral alternative */}
-                  {phrase.suggestedAlternative && (
-                    <div className="text-sm text-emerald-600 font-medium">
-                      → {phrase.suggestedAlternative}
-                    </div>
-                  )}
+                  {/* Why + alternative */}
+                  <div className="px-5 py-3 space-y-2.5">
+                    {phrase.reason && (
+                      <div className="flex items-start gap-2">
+                        <i className="fas fa-info-circle text-gray-300 text-xs mt-0.5 shrink-0" />
+                        <p className="text-xs text-gray-500 leading-relaxed">{phrase.reason}</p>
+                      </div>
+                    )}
+                    {phrase.suggestedAlternative && (
+                      <div className="flex items-start gap-2 bg-emerald-50 rounded-lg px-3 py-2">
+                        <i className="fas fa-arrow-right text-emerald-500 text-xs mt-0.5 shrink-0" />
+                        <div>
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-600 block mb-0.5">
+                            More neutral alternative
+                          </span>
+                          <span className="text-xs text-emerald-800 font-medium">
+                            "{phrase.suggestedAlternative}"
+                          </span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </div>
               ))}
             </div>
@@ -223,58 +215,105 @@ const ResultView: React.FC<ResultViewProps> = ({ result, onClose }) => {
           )}
         </div>
 
-        {/* Highlighted Article Text */}
+        {/* ── 3. STRENGTHS / WELL-WRITTEN PHRASES ────────────────── */}
+        {strengths.length > 0 && (
+          <div>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-bold text-gray-800">Well-Written Phrases</h3>
+              <span className="text-xs text-gray-400 bg-gray-100 px-2 py-1 rounded-full font-medium">
+                {strengths.length} found
+              </span>
+            </div>
+            <div className="space-y-2">
+              {strengths.map((s: string, idx: number) => (
+                <div key={idx}
+                  className="bg-emerald-50 border border-emerald-100 rounded-xl px-5 py-3 flex items-start gap-3">
+                  <i className="fas fa-check-circle text-emerald-500 text-sm mt-0.5 shrink-0" />
+                  <div>
+                    <div className="text-[10px] font-bold uppercase tracking-wider text-emerald-600 mb-0.5">
+                      Neutral / balanced language
+                    </div>
+                    <span className="text-sm text-emerald-900 font-medium">"{s}"</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* ── 4. ALIGNMENT + FRAMING DETAIL ───────────────────────── */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className={`p-6 rounded-3xl border shadow-sm ${getBiasColorClass(framingScore)}`}>
+            <div className="flex justify-between items-start">
+              <span className="text-xs font-bold uppercase tracking-widest opacity-70">Framing Intensity</span>
+              {confidence > 0 && <span className="text-xs opacity-60 font-medium">{confidence}% confidence</span>}
+            </div>
+            <div className="mt-4 flex items-center justify-between">
+              <div className="text-3xl font-black">{framingScore}/5</div>
+              <div className="text-sm font-bold uppercase tracking-widest">{getFramingLabel(framingScore)}</div>
+            </div>
+            <div className="mt-6 h-2 bg-white/40 rounded-full overflow-hidden">
+              <div className="h-full bg-current transition-all duration-700"
+                   style={{ width: `${(framingScore / 5) * 100}%` }} />
+            </div>
+          </div>
+
+          <div className="p-6 bg-white rounded-3xl border border-gray-100 shadow-sm">
+            <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">Political Alignment</span>
+            <div className="mt-4"
+              style={{ color: BIAS_COLORS[result.category as keyof typeof BIAS_COLORS] ?? '#6b7280' }}>
+              <div className="text-2xl font-black italic uppercase tracking-tight">{result.category}</div>
+            </div>
+            <div className="mt-6">
+              <div className="relative h-3 rounded-full shadow-inner overflow-visible">
+                <div className="absolute inset-0 rounded-full bg-gradient-to-r from-blue-700 via-gray-200 to-red-700" />
+                <div className="absolute top-1/2 -translate-y-1/2 transition-all duration-700 ease-out"
+                     style={{ left: `clamp(0px, calc(${((alignmentScore + 100) / 200) * 100}% - 12px), calc(100% - 24px))` }}>
+                  <div className="w-6 h-6 bg-white border-4 border-gray-900 rounded-full shadow-lg" />
+                </div>
+              </div>
+              <div className="flex justify-between mt-3 text-[10px] font-black uppercase text-gray-400">
+                <span>Far Left</span><span>Center</span><span>Far Right</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* ── 5. HIGHLIGHTED TEXT ─────────────────────────────────── */}
         {result.highlightedText && (
           <div>
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-bold text-gray-800">Article Text</h3>
-              <button
-                onClick={() => setShowHighlighted(v => !v)}
-                className="text-xs font-semibold text-blue-600 hover:text-blue-800 transition-colors"
-              >
+              <button onClick={() => setShowHighlighted(v => !v)}
+                className="text-xs font-semibold text-blue-600 hover:text-blue-800 transition-colors">
                 {showHighlighted ? 'Hide' : 'Show highlighted text'}
               </button>
             </div>
-
             {showHighlighted && (
-              <div
-                className="text-sm text-gray-700 leading-relaxed bg-gray-50 rounded-2xl p-6 border border-gray-100
-                           [&_mark]:bg-yellow-200 [&_mark]:text-gray-900 [&_mark]:rounded [&_mark]:px-0.5
-                           [&_mark]:cursor-help"
-                dangerouslySetInnerHTML={{ __html: result.highlightedText }}
-              />
+              <div className="text-sm text-gray-700 leading-relaxed bg-gray-50 rounded-2xl p-6 border border-gray-100
+                             [&_mark]:bg-yellow-200 [&_mark]:text-gray-900 [&_mark]:rounded [&_mark]:px-0.5 [&_mark]:cursor-help"
+                   dangerouslySetInnerHTML={{ __html: result.highlightedText }} />
             )}
           </div>
         )}
 
-        {/* ── Bias Types Reference — only show types actually detected in this article */}
+        {/* ── 6. BIAS TYPES REFERENCE ─────────────────────────────── */}
         {(() => {
-          // Map detailedBiases type names back to BIAS_INFO keys
           const TYPE_TO_KEY: Record<string, string> = {
             'Political Framing Bias': 'political_framing',
             'Sensationalism':         'sensationalism',
             'Source Selection Bias':  'source_bias',
           };
           const detectedKeys = new Set<string>(
-            (result.detailedBiases ?? [])
-              .map((d: any) => TYPE_TO_KEY[d.type])
-              .filter(Boolean)
+            (result.detailedBiases ?? []).map((d: any) => TYPE_TO_KEY[d.type]).filter(Boolean)
           );
-          // Show direction only if the slider is not sitting at center
           if ((result.biasScore ?? 0) !== 0) detectedKeys.add('political_direction');
 
-          // Build a lookup: bias key → real phrases from this article
-          const KEY_TO_TYPE: Record<string, string> = {
-            'political_framing': 'Political Framing Bias',
-            'sensationalism':    'Sensationalism',
-            'source_bias':       'Source Selection Bias',
-          };
           const articlePhrases: Record<string, any[]> = {};
           (result.detailedBiases ?? []).forEach((d: any) => {
             const key = TYPE_TO_KEY[d.type];
             if (key && d.phrases?.length > 0) articlePhrases[key] = d.phrases;
           });
-          // political_direction has no detailedBiases entry — use biasedPhrases (same evidence)
           if (detectedKeys.has('political_direction') && (result.biasedPhrases ?? []).length > 0) {
             articlePhrases['political_direction'] = (result.biasedPhrases as any[]).map(p => ({
               phrase: typeof p === 'string' ? p : p.phrase,
@@ -288,21 +327,16 @@ const ResultView: React.FC<ResultViewProps> = ({ result, onClose }) => {
 
           return (
             <div>
-              <h3 className="text-lg font-bold text-gray-800 mb-1">
-                About the Bias Types Detected
-              </h3>
+              <h3 className="text-lg font-bold text-gray-800 mb-1">About the Bias Types Detected</h3>
               <p className="text-xs text-gray-400 mb-4">
-                {visibleBiases.length} bias type{visibleBiases.length > 1 ? 's' : ''} found in this article — click to learn more
+                {visibleBiases.length} bias type{visibleBiases.length > 1 ? 's' : ''} found — click to learn more
               </p>
               <div className="space-y-3">
                 {visibleBiases.map(bias => (
                   <div key={bias.key} className={`rounded-2xl border transition-all duration-200 overflow-hidden
                     ${selectedBias === bias.key ? `${bias.bg} ${bias.border}` : 'bg-gray-50 border-gray-200'}`}>
-
-                    <button
-                      onClick={() => setSelectedBias(selectedBias === bias.key ? null : bias.key)}
-                      className="w-full text-left p-4 flex items-center justify-between"
-                    >
+                    <button onClick={() => setSelectedBias(selectedBias === bias.key ? null : bias.key)}
+                      className="w-full text-left p-4 flex items-center justify-between">
                       <div className="flex items-center gap-3">
                         <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-sm
                           ${selectedBias === bias.key ? bias.tag : 'bg-white border border-gray-200 text-gray-500'}`}>
@@ -320,47 +354,30 @@ const ResultView: React.FC<ResultViewProps> = ({ result, onClose }) => {
                     {selectedBias === bias.key && (
                       <div className="px-5 pb-5 space-y-4">
                         <p className={`text-sm leading-relaxed ${bias.color}`}>{bias.desc}</p>
-
-                        {/* Real examples from the article */}
                         {(() => {
                           const real = articlePhrases[bias.key];
-                          if (real && real.length > 0) {
-                            return (
-                              <div className="space-y-3">
-                                <div className="text-xs font-bold uppercase tracking-wider text-gray-500">
-                                  From this article
+                          if (real?.length > 0) return (
+                            <div className="space-y-3">
+                              <div className="text-xs font-bold uppercase tracking-wider text-gray-500">From this article</div>
+                              {real.slice(0, 3).map((p: any, i: number) => (
+                                <div key={i} className={`rounded-xl border p-3 ${bias.bg} ${bias.border}`}>
+                                  <div className="font-semibold text-gray-900 italic text-sm mb-1">"{p.phrase}"</div>
+                                  {p.explanation && <div className="text-xs text-gray-500 mb-1">{p.explanation}</div>}
+                                  {p.neutral_alternative && <div className="text-xs text-emerald-600 font-medium">→ {p.neutral_alternative}</div>}
                                 </div>
-                                {real.slice(0, 3).map((p: any, i: number) => (
-                                  <div key={i} className={`rounded-xl border p-3 ${bias.bg} ${bias.border}`}>
-                                    <div className="font-semibold text-gray-900 italic text-sm mb-1">
-                                      "{p.phrase}"
-                                    </div>
-                                    {p.explanation && (
-                                      <div className="text-xs text-gray-500 mb-1">{p.explanation}</div>
-                                    )}
-                                    {p.neutral_alternative && (
-                                      <div className="text-xs text-emerald-600 font-medium">
-                                        → {p.neutral_alternative}
-                                      </div>
-                                    )}
-                                  </div>
-                                ))}
-                              </div>
-                            );
-                          }
-                          // Fallback to generic example if no real phrases available
+                              ))}
+                            </div>
+                          );
                           return (
                             <div className="space-y-2">
                               <div className="text-xs font-bold uppercase tracking-wider text-gray-500">Generic example</div>
                               <div className="bg-red-50 border border-red-200 rounded-xl p-3">
-                                <div className="text-xs font-bold text-red-500 uppercase tracking-wider mb-1">Biased</div>
+                                <div className="text-xs font-bold text-red-500 uppercase mb-1">Biased</div>
                                 <p className="text-sm text-red-900 italic">{bias.biased}</p>
                               </div>
-                              <div className="flex justify-center">
-                                <i className="fas fa-arrow-down text-gray-300 text-xs" />
-                              </div>
+                              <div className="flex justify-center"><i className="fas fa-arrow-down text-gray-300 text-xs" /></div>
                               <div className="bg-green-50 border border-green-200 rounded-xl p-3">
-                                <div className="text-xs font-bold text-green-600 uppercase tracking-wider mb-1">Neutral alternative</div>
+                                <div className="text-xs font-bold text-green-600 uppercase mb-1">Neutral alternative</div>
                                 <p className="text-sm text-green-900 italic">{bias.neutral}</p>
                               </div>
                               <p className="text-xs text-gray-500 leading-relaxed">{bias.explanation}</p>
@@ -368,17 +385,6 @@ const ResultView: React.FC<ResultViewProps> = ({ result, onClose }) => {
                           );
                         })()}
 
-                        <div>
-                          <div className="text-xs font-bold uppercase tracking-wider text-gray-500 mb-2">What to look for</div>
-                          <ul className="space-y-1">
-                            {bias.signals.map((s, i) => (
-                              <li key={i} className="flex items-start gap-2 text-xs text-gray-600">
-                                <i className="fas fa-circle text-[4px] mt-1.5 shrink-0 text-gray-400" />
-                                {s}
-                              </li>
-                            ))}
-                          </ul>
-                        </div>
                       </div>
                     )}
                   </div>

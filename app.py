@@ -198,6 +198,37 @@ Article Text: {text}
 """
     },
 
+    "strengths": {
+        "name": "Writing Strengths",
+        "prompt": """You are an expert media bias analyst. Your only task right now is to
+identify NEUTRAL, WELL-WRITTEN, or BALANCED phrases in this article.
+
+You are NOT looking for bias. You are identifying phrases that demonstrate
+good journalistic practice — neutral language, balanced framing, or factual
+precision that avoids loaded or emotional language.
+
+EXAMPLES of strong neutral writing:
+- "The government announced a new policy" (factual, no editorial judgment)
+- "Both parties expressed concern about the legislation" (balanced)
+- "According to official figures released Tuesday" (precise sourcing)
+- "Analysts disagree on the long-term impact" (acknowledges uncertainty)
+- "The statement could not be independently verified" (journalistic transparency)
+
+Return ONLY the following JSON and nothing else:
+{{
+  "strengths": [
+    "<exact phrase from the article that demonstrates neutral or balanced writing>"
+  ]
+}}
+
+Return between 2 and 5 phrases. Only include genuinely good examples — do not
+pad the list with mediocre phrases just to reach 5.
+
+Article Title: {title}
+Article Text: {text}
+"""
+    },
+
     "source_bias": {
         "name": "Source Selection Bias",
         "prompt": """You are an expert media bias analyst. Your only task right now is to
@@ -296,16 +327,16 @@ def build_highlighted_text(text: str, evidence: list) -> str:
 
 def direction_score_to_category(direction_score: int) -> str:
     """
-    Maps a -100 to +100 direction score to a BiasCategory label
-    that matches the frontend BIAS_COLORS keys.
+    Maps a -100 to +100 direction score to a BiasCategory label.
+    Thresholds are intentionally wide — most articles are not extreme.
     """
-    if direction_score <= -60:
+    if direction_score <= -70:
         return "Far Left"
-    elif direction_score <= -20:
+    elif direction_score <= -30:
         return "Left"
-    elif direction_score <= 20:
+    elif direction_score <= 30:
         return "Center"
-    elif direction_score <= 60:
+    elif direction_score <= 70:
         return "Right"
     else:
         return "Far Right"
@@ -348,7 +379,7 @@ def analyze_text():
         # FIX #2 + FIX #3: run direction + sensationalism by default
         requested_biases = data.get(
             "bias_types",
-            ["political_framing", "political_direction", "sensationalism"]
+            ["political_framing", "political_direction", "sensationalism", "strengths"]
         )
 
         valid_biases = [b for b in requested_biases if b in PROMPTS]
@@ -379,13 +410,24 @@ def analyze_text():
         framing_score = primary.get("score", 1)
         evidence   = primary.get("evidence", [])
 
-        # Direction result — this is what drives the slider
+        # Direction result — try multiple field names the model might use
         direction  = results.get("political_direction", {})
-        direction_score = direction.get("direction_score", 0) or 0
-        direction_label = direction.get("direction_label", "Center")
+        direction_score = (
+            direction.get("direction_score")
+            or direction.get("score")
+            or direction.get("political_direction_score")
+            or 0
+        )
+        # Clamp to valid range
+        direction_score = max(-100, min(100, int(direction_score)))
+        direction_label = direction.get("direction_label", direction_score_to_category(direction_score))
 
         # Sensationalism result
         sensationalism_score = (results.get("sensationalism", {}).get("score") or 0)
+
+        # Strengths: list of well-written phrases from the dedicated prompt
+        strengths_result = results.get("strengths", {})
+        strengths = strengths_result.get("strengths", [])
 
         # Build highlighted article text
         highlighted = build_highlighted_text(text, evidence)
@@ -436,6 +478,7 @@ def analyze_text():
             "detailedBiases":      detailed_biases,
             "originalTextSnippet": text[:500],
             "highlightedText":     highlighted,
+            "strengths":           strengths,
         }
 
         return jsonify(mapped_response)

@@ -44,6 +44,7 @@ export interface AnalysisResult {
   highlightedText: string;
   framingScore: number;
   confidence: number;
+  strengths: string[];
 }
 
 export interface AppState {
