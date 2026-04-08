@@ -6,7 +6,7 @@ interface ArticleAnalyzerProps {
   onResult: (result: AnalysisResult) => void;
 }
 
-type Model = "gemini" | "claude";
+type Model = 'gemini' | 'claude';
 
 const ArticleAnalyzer: React.FC<ArticleAnalyzerProps> = ({ onResult }) => {
   const [title,   setTitle]   = useState('');
@@ -15,8 +15,7 @@ const ArticleAnalyzer: React.FC<ArticleAnalyzerProps> = ({ onResult }) => {
   const [error,   setError]   = useState('');
   const [model,   setModel]   = useState<Model>('gemini');
 
-  const handleAnalyze = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleAnalyze = async () => {
     if (!content.trim()) return;
     setLoading(true);
     setError('');
@@ -25,108 +24,70 @@ const ArticleAnalyzer: React.FC<ArticleAnalyzerProps> = ({ onResult }) => {
       onResult(result);
       setTitle('');
       setContent('');
-    } catch (err) {
-      console.error(err);
-      setError('Analysis failed. Check your API key or backend status.');
+    } catch {
+      setError('Analysis failed. Check your API key and backend status.');
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
+    <div className="space-y-4">
 
-      {/* Header */}
-      <div className="p-6 bg-slate-900 text-white">
-        <h2 className="text-xl font-bold flex items-center gap-2">
-          <i className="fas fa-microscope text-blue-400"></i>
-          New Analysis
-        </h2>
-        <p className="text-slate-400 text-sm mt-1">Paste article text below to detect bias</p>
-      </div>
+      {/* Title input */}
+      <input
+        type="text"
+        value={title}
+        onChange={e => setTitle(e.target.value)}
+        placeholder="Article title (optional)"
+        className="w-full px-4 py-2.5 text-sm border border-gray-200 rounded-lg outline-none focus:border-gray-400 transition-colors placeholder:text-gray-300 bg-white"
+      />
 
-      <div className="p-6 space-y-4">
+      {/* Article text */}
+      <textarea
+        value={content}
+        onChange={e => setContent(e.target.value)}
+        placeholder="Paste the full article text here..."
+        className="w-full h-48 px-4 py-3 text-sm border border-gray-200 rounded-lg outline-none focus:border-gray-400 transition-colors resize-none placeholder:text-gray-300 bg-white"
+      />
 
-        {/* Model selector — two clean tabs */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">Model</label>
-          <div className="flex rounded-lg border border-gray-200 overflow-hidden">
-            {(["gemini", "claude"] as Model[]).map((m) => (
-              <button
-                key={m}
-                type="button"
-                onClick={() => setModel(m)}
-                className={`flex-1 py-2 text-sm font-medium transition-colors ${
-                  model === m
-                    ? 'bg-slate-900 text-white'
-                    : 'bg-white text-gray-500 hover:bg-gray-50'
-                }`}
-              >
-                {m === 'gemini' ? 'Gemini 2.5 Flash' : 'Claude Sonnet'}
-              </button>
-            ))}
-          </div>
+      {/* Bottom row: model selector + button */}
+      <div className="flex items-center gap-3">
+
+        {/* Model toggle — small and subtle */}
+        <div className="flex rounded-md border border-gray-200 overflow-hidden text-xs shrink-0">
+          {(['gemini', 'claude'] as Model[]).map(m => (
+            <button
+              key={m}
+              type="button"
+              onClick={() => setModel(m)}
+              className={`px-3 py-2 font-medium transition-colors ${
+                model === m
+                  ? 'bg-gray-900 text-white'
+                  : 'bg-white text-gray-400 hover:text-gray-700'
+              }`}
+            >
+              {m === 'gemini' ? 'Gemini' : 'Claude'}
+            </button>
+          ))}
         </div>
 
-        {/* Title */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Article Title <span className="text-gray-400 font-normal">(optional)</span>
-          </label>
-          <input
-            type="text"
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            placeholder="e.g. Breaking News: The Economic Shift..."
-            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all"
-          />
-        </div>
-
-        {/* Content */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Article Content</label>
-          <textarea
-            value={content}
-            onChange={(e) => setContent(e.target.value)}
-            placeholder="Paste the full text of the article here..."
-            className="w-full h-48 px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all resize-none"
-            required
-          />
-        </div>
-
-        {/* Error */}
-        {error && (
-          <div className="p-3 bg-red-50 text-red-600 rounded-lg text-sm flex items-center gap-2">
-            <i className="fas fa-exclamation-circle" />
-            {error}
-          </div>
-        )}
-
-        {/* Submit */}
+        {/* Run button */}
         <button
-          type="button"
           onClick={handleAnalyze}
           disabled={loading || !content.trim()}
-          className={`w-full py-3 px-4 rounded-lg font-bold text-white transition-all flex items-center justify-center gap-2 ${
+          className={`flex-1 py-2.5 rounded-lg text-sm font-medium text-white transition-colors ${
             loading || !content.trim()
-              ? 'bg-gray-300 cursor-not-allowed'
-              : 'bg-blue-600 hover:bg-blue-700 active:scale-[0.98]'
+              ? 'bg-gray-200 cursor-not-allowed text-gray-400'
+              : 'bg-gray-900 hover:bg-gray-700'
           }`}
         >
-          {loading ? (
-            <>
-              <i className="fas fa-spinner fa-spin" />
-              Analysing with {model === 'gemini' ? 'Gemini' : 'Claude'}...
-            </>
-          ) : (
-            <>
-              <i className="fas fa-bolt" />
-              Run Analysis
-            </>
-          )}
+          {loading ? `Analysing with ${model === 'gemini' ? 'Gemini' : 'Claude'}...` : 'Run Analysis'}
         </button>
-
       </div>
+
+      {error && <p className="text-xs text-red-500">{error}</p>}
+
     </div>
   );
 };
