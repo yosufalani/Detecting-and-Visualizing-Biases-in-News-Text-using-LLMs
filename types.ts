@@ -41,6 +41,8 @@ export interface AnalysisResult {
   biasedPhrases: BiasedPhrase[];
   detailedBiases: BiasDetail[];
   originalTextSnippet: string;
+  fullText?: string;
+  source?: string;
   highlightedText: string;
   framingScore: number;
   confidence: number;

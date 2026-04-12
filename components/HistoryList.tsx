@@ -21,7 +21,9 @@ const HistoryList: React.FC<HistoryListProps> = ({ history, onDelete, onSelect }
           <div className="min-w-0">
             <p className="text-sm text-gray-800 truncate">{item.title}</p>
             <p className="text-xs text-gray-400 mt-0.5">
-              {new Date(item.timestamp).toLocaleDateString()} · {item.category ?? 'Unknown'}
+              {new Date(item.timestamp).toLocaleDateString()}
+              {item.source ? ` · ${item.source}` : ''}
+              {item.category ? ` · ${item.category}` : ''}
             </p>
           </div>
           <button

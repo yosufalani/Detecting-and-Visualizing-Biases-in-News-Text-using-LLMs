@@ -62,7 +62,16 @@ def init_db():
                   detailedBiases TEXT,
                   highlightedText TEXT,
                   framingScore REAL,
-                  confidence REAL)''')
+                  confidence REAL,
+                  fullText TEXT,
+                  source TEXT)''')
+
+    # Migrate existing DBs that don't have the new columns yet
+    for col, coltype in [("fullText", "TEXT"), ("source", "TEXT")]:
+        try:
+            c.execute(f"ALTER TABLE analysis ADD COLUMN {col} {coltype}")
+        except Exception:
+            pass  # Column already exists
 
     conn.commit()
     conn.close()
@@ -75,48 +84,43 @@ init_db()
 
 PROMPTS = {
 
-    "political_framing": {
-        "name": "Political Framing Bias",
-        "prompt": """You are an expert media bias analyst. Your only task right now is to
-analyze POLITICAL FRAMING BIAS. Do not comment on any other type of bias.
+    "framing": {
+        "name": "Framing Bias",
+        "prompt": """You are an expert media bias analyst. Your only task is to analyze FRAMING BIAS.
 
-Political framing bias occurs when specific word choices or narrative structure
-favor one political perspective over another — without necessarily stating
-anything factually false.
+Framing bias occurs when word choices or narrative structure favor one perspective
+over another without stating anything factually false.
 
-EXAMPLES of political framing bias:
-- "Tax relief" (implies taxes are a burden) vs "tax cuts" (neutral)
-- "Pro-life" vs "anti-abortion" — the label itself takes a side
+EXAMPLES:
+- "Tax relief" vs "tax cuts" — the first implies taxes are a burden
 - "Illegal aliens" vs "undocumented immigrants" vs "migrants"
 - Describing a protest as a "riot" vs a "demonstration"
-- "Job creators" vs "the wealthy" when referring to the same group
+- "Job creators" vs "the wealthy" for the same group
 - "Government spending" vs "public investment"
-- Quoting one party's characterization of an event without challenge
 
-SCORING GUIDE — read carefully before scoring:
-1 = Fully neutral. No loaded political language anywhere.
-2 = Mild. One or two loaded words but the overall framing is balanced.
-3 = Moderate. A clear pattern of language that leans one direction.
-4 = Strong. Consistent one-sided framing throughout the article.
-5 = Extreme. The article reads as political messaging, not journalism.
+SCORING GUIDE:
+1 = No framing bias. Fully neutral language throughout.
+2 = Mild. One or two loaded words, overall balanced.
+3 = Moderate. Clear pattern leaning one direction.
+4 = Strong. Consistent one-sided framing throughout.
+5 = Extreme. Reads as messaging, not journalism.
 
-Return ONLY the following JSON and nothing else:
+Return ONLY this JSON:
 {{
   "score": <integer 1-5>,
   "confidence": <integer 1-100>,
-  "reasoning": "<one sentence explaining the score, max 25 words>",
+  "reasoning": "<max 25 words>",
   "evidence": [
     {{
-      "phrase": "<exact phrase copied from the article>",
-      "explanation": "<why this phrase is politically framed>",
-      "neutral_alternative": "<how a neutral journalist would write it>"
+      "phrase": "<exact phrase from article>",
+      "explanation": "<why it is framing bias>",
+      "neutral_alternative": "<neutral version>"
     }}
   ]
 }}
 
 Article Title: {title}
-Article Text: {text}
-"""
+Article Text: {text}"""
     },
 
     "political_direction": {
@@ -124,160 +128,424 @@ Article Text: {text}
         "prompt": """You are an expert media bias analyst. Your only task is to determine
 the POLITICAL DIRECTION of any bias found in this article.
 
-You are NOT scoring how biased the article is — that is handled separately.
-You are ONLY determining which direction the bias leans, if any.
+You are NOT scoring how biased the article is. You are ONLY determining which
+direction the bias leans, if any. Scale: -100 (Far Left) to +100 (Far Right).
 
-The scale runs from -100 (Far Left) to +100 (Far Right), with 0 being Center.
+LEFT signals: progressive framing, sympathetic to regulation/immigration/labor,
+terms like "undocumented immigrants", "reproductive rights", "gun safety".
 
-LEFT-leaning signals (negative scores):
-- Language that favors progressive, liberal, or left-wing positions
-- Framing that portrays government intervention, social programs, or regulation positively
-- Language sympathetic to labor, minorities, immigration, climate action
-- Using terms like "undocumented immigrants", "reproductive rights", "gun safety"
-- Critical framing of corporations, wealthy individuals, or conservative politicians
+RIGHT signals: conservative framing, sympathetic to deregulation/border control/military,
+terms like "illegal aliens", "pro-life", "tax relief", "radical left".
 
-RIGHT-leaning signals (positive scores):
-- Language that favors conservative, traditional, or right-wing positions
-- Framing that portrays free markets, deregulation, or national security positively
-- Language sympathetic to law enforcement, military, border control, religious values
-- Using terms like "illegal aliens", "pro-life", "tax relief", "radical left"
-- Critical framing of government programs, progressive politicians, or immigration
-
-SCORING EXAMPLES:
-- A BBC article on climate change with balanced sources: 0
-- A Fox News op-ed using "radical left" and "illegal invasion": +75
-- A Guardian article framing all conservatives as anti-science: -65
-- A Reuters wire report with no clear lean: 0
-
-If the article has NO political bias (score of 1 on the framing scale), return 0.
-
-Return ONLY the following JSON and nothing else:
+Return ONLY this JSON:
 {{
-  "direction_score": <integer from -100 to +100>,
-  "direction_label": "<one of: Far Left, Left, Center-Left, Center, Center-Right, Right, Far Right>",
+  "direction_score": <integer -100 to +100>,
+  "direction_label": "<Far Left | Left | Center-Left | Center | Center-Right | Right | Far Right>",
   "confidence": <integer 1-100>,
-  "reasoning": "<one sentence explaining the direction, max 25 words>"
+  "reasoning": "<max 25 words>"
 }}
 
 Article Title: {title}
-Article Text: {text}
-"""
+Article Text: {text}"""
+    },
+
+    "negativity": {
+        "name": "Negativity Bias",
+        "prompt": """You are an expert media bias analyst. Your only task is to analyze NEGATIVITY BIAS.
+
+Negativity bias occurs when an article disproportionately focuses on negative
+aspects, threats, failures, or bad outcomes — even when positive or neutral
+information is equally relevant or available.
+
+EXAMPLES:
+- Covering only failures of a policy while ignoring successes
+- Leading with worst-case scenarios without mentioning likely outcomes
+- Using negative emotional language where neutral language would suffice
+- Selecting statistics that emphasize decline over improvement
+- Consistently framing ambiguous situations as threats or problems
+
+SCORING GUIDE:
+1 = Balanced. Positive, negative, and neutral information treated equally.
+2 = Mild. Slight negative lean but broadly representative.
+3 = Moderate. Negative framing dominates but some balance present.
+4 = Strong. Consistently negative. Positive information minimized or omitted.
+5 = Extreme. Entirely negative framing regardless of actual events.
+
+Return ONLY this JSON:
+{{
+  "score": <integer 1-5>,
+  "confidence": <integer 1-100>,
+  "reasoning": "<max 25 words>",
+  "evidence": [
+    {{
+      "phrase": "<exact phrase from article>",
+      "explanation": "<why it reflects negativity bias>",
+      "neutral_alternative": "<more balanced version>"
+    }}
+  ]
+}}
+
+Article Title: {title}
+Article Text: {text}"""
+    },
+
+    "confirmation": {
+        "name": "Confirmation Bias",
+        "prompt": """You are an expert media bias analyst. Your only task is to analyze CONFIRMATION BIAS.
+
+Confirmation bias in journalism occurs when an article selectively presents
+information that confirms a pre-existing narrative or conclusion, while
+downplaying or omitting contradicting evidence.
+
+EXAMPLES:
+- Presenting only evidence that supports a predetermined conclusion
+- Treating confirming sources as authoritative and contradicting sources as fringe
+- Framing ambiguous data as conclusive proof of one interpretation
+- Ignoring studies or events that complicate the article's implied argument
+- Structuring the article so the conclusion is assumed from the opening paragraph
+
+SCORING GUIDE:
+1 = No confirmation bias. Evidence presented openly regardless of direction.
+2 = Mild. Slight tendency to favor one interpretation but contradictions acknowledged.
+3 = Moderate. Clear narrative being confirmed. Contradictions minimized.
+4 = Strong. Article is structured to prove a conclusion. Contradictions absent.
+5 = Extreme. Only confirming evidence included. Reads as advocacy.
+
+Return ONLY this JSON:
+{{
+  "score": <integer 1-5>,
+  "confidence": <integer 1-100>,
+  "reasoning": "<max 25 words>",
+  "evidence": [
+    {{
+      "phrase": "<exact phrase from article>",
+      "explanation": "<why it reflects confirmation bias>",
+      "neutral_alternative": "<more open-ended version>"
+    }}
+  ]
+}}
+
+Article Title: {title}
+Article Text: {text}"""
+    },
+
+    "anchoring": {
+        "name": "Anchoring Bias",
+        "prompt": """You are an expert media bias analyst. Your only task is to analyze ANCHORING BIAS.
+
+Anchoring bias occurs when an article establishes an initial reference point
+(a number, claim, or framing) that disproportionately influences how subsequent
+information is interpreted by the reader.
+
+EXAMPLES:
+- Opening with an extreme statistic that makes moderate figures seem small
+- Introducing the most dramatic claim first, making other claims seem minor by comparison
+- Using a specific number as a baseline without justifying why that baseline was chosen
+- Framing a policy cost as "only X" or "as much as X" to set an emotional anchor
+- Establishing a villain or hero in the opening that colors the rest of the article
+
+SCORING GUIDE:
+1 = No anchoring. Information introduced in a neutral, contextualised order.
+2 = Mild. One anchoring element but it does not strongly distort interpretation.
+3 = Moderate. Anchoring clearly shapes how subsequent information reads.
+4 = Strong. The anchor dominates and makes balanced interpretation difficult.
+5 = Extreme. The entire article is structured around a manipulative anchor.
+
+Return ONLY this JSON:
+{{
+  "score": <integer 1-5>,
+  "confidence": <integer 1-100>,
+  "reasoning": "<max 25 words>",
+  "evidence": [
+    {{
+      "phrase": "<exact phrase from article>",
+      "explanation": "<why it functions as an anchor>",
+      "neutral_alternative": "<more contextualised version>"
+    }}
+  ]
+}}
+
+Article Title: {title}
+Article Text: {text}"""
+    },
+
+    "attribution": {
+        "name": "Attribution Bias",
+        "prompt": """You are an expert media bias analyst. Your only task is to analyze ATTRIBUTION BIAS.
+
+Attribution bias occurs when an article applies different standards of explanation
+to different groups — attributing the same behavior to character flaws in one
+group while excusing it as circumstance in another.
+
+EXAMPLES:
+- Explaining one politician's mistakes as personal failure while explaining
+  another's as systemic pressure
+- Attributing violence by one group to ideology while attributing the same
+  behavior by another group to poverty or mental illness
+- Describing protests by favored groups as "demonstrations" and by disfavored
+  groups as "mobs"
+- Using passive voice to downplay agency of favored actors ("mistakes were made")
+  while using active voice to emphasize agency of disfavored actors
+
+SCORING GUIDE:
+1 = Consistent. Same standards of explanation applied to all groups.
+2 = Mild. Slight inconsistency but not systematically applied.
+3 = Moderate. Clear double standard visible across the article.
+4 = Strong. Systematic different attribution applied throughout.
+5 = Extreme. One group entirely absolved, another entirely blamed.
+
+Return ONLY this JSON:
+{{
+  "score": <integer 1-5>,
+  "confidence": <integer 1-100>,
+  "reasoning": "<max 25 words>",
+  "evidence": [
+    {{
+      "phrase": "<exact phrase from article>",
+      "explanation": "<why it reflects attribution bias>",
+      "neutral_alternative": "<consistent version>"
+    }}
+  ]
+}}
+
+Article Title: {title}
+Article Text: {text}"""
+    },
+
+    "selection": {
+        "name": "Selection Bias",
+        "prompt": """You are an expert media bias analyst. Your only task is to analyze SELECTION BIAS.
+
+Selection bias occurs when an article selectively quotes or references sources
+that support one perspective while ignoring or minimizing opposing voices.
+
+EXAMPLES:
+- Only quoting experts from one political party
+- Giving significantly more space to one side's arguments
+- Using anonymous sources for criticism but named sources for defense
+- Quoting a fringe figure to represent a mainstream position
+- Describing one side's sources as "experts" and the other's as "critics"
+- Citing only studies that support one view
+
+SCORING GUIDE:
+1 = Fully balanced. Multiple perspectives represented fairly.
+2 = Mild imbalance. Slight lean but opposing views present.
+3 = Moderate. One perspective clearly dominates.
+4 = Strong. Only one perspective sourced or validated.
+5 = Extreme. Entirely one-sided. No credible opposing voices.
+
+Return ONLY this JSON:
+{{
+  "score": <integer 1-5>,
+  "confidence": <integer 1-100>,
+  "reasoning": "<max 25 words>",
+  "evidence": [
+    {{
+      "phrase": "<exact phrase from article>",
+      "explanation": "<why this shows selection bias>",
+      "neutral_alternative": "<what balanced sourcing would look like>"
+    }}
+  ]
+}}
+
+Article Title: {title}
+Article Text: {text}"""
     },
 
     "sensationalism": {
         "name": "Sensationalism",
-        "prompt": """You are an expert media bias analyst. Your only task right now is to
-analyze SENSATIONALISM. Do not comment on any other type of bias.
+        "prompt": """You are an expert media bias analyst. Your only task is to analyze SENSATIONALISM.
 
-Sensationalism occurs when language exaggerates, dramatizes, or uses emotional
-triggers to provoke a reaction rather than inform the reader.
+Sensationalism occurs when language exaggerates or uses emotional triggers to
+provoke reaction rather than inform.
 
-EXAMPLES of sensationalism:
+EXAMPLES:
 - "Explosive revelations" instead of "new information"
 - "Bombshell report" for a routine story
-- "Crisis" applied to minor or routine problems
-- Excessive adjectives: "shocking", "devastating", "terrifying", "jaw-dropping"
-- Vague but alarming claims: "sources say it could be catastrophic"
-- Prioritizing emotional drama over factual content
-- Clickbait-style headlines that overstate what the article actually says
+- "Crisis" applied to minor problems
+- Excessive adjectives: "shocking", "devastating", "terrifying"
+- Vague alarming claims: "sources say it could be catastrophic"
 
-SCORING GUIDE — read carefully before scoring:
+SCORING GUIDE:
 1 = No sensationalism. Measured, factual tone throughout.
-2 = Mild. One or two dramatic words but the overall tone is restrained.
-3 = Moderate. Regular use of emotional language to increase engagement.
-4 = Strong. The article consistently prioritizes drama over factual accuracy.
-5 = Extreme. Tabloid-level language. Facts are secondary to emotional impact.
+2 = Mild. One or two dramatic words, overall restrained.
+3 = Moderate. Regular emotional language to increase engagement.
+4 = Strong. Consistently prioritizes drama over accuracy.
+5 = Extreme. Tabloid-level. Facts secondary to emotional impact.
 
-Return ONLY the following JSON and nothing else:
+Return ONLY this JSON:
 {{
   "score": <integer 1-5>,
   "confidence": <integer 1-100>,
-  "reasoning": "<one sentence explaining the score, max 25 words>",
+  "reasoning": "<max 25 words>",
   "evidence": [
     {{
-      "phrase": "<exact phrase copied from the article>",
-      "explanation": "<why this phrase is sensationalist>",
-      "neutral_alternative": "<how a factual journalist would write it>"
+      "phrase": "<exact phrase from article>",
+      "explanation": "<why it is sensationalist>",
+      "neutral_alternative": "<factual version>"
     }}
   ]
 }}
 
 Article Title: {title}
-Article Text: {text}
-"""
+Article Text: {text}"""
+    },
+
+    "false_balance": {
+        "name": "False Balance",
+        "prompt": """You are an expert media bias analyst. Your only task is to analyze FALSE BALANCE.
+
+False balance occurs when an article treats two positions as equally credible or
+equally supported by evidence when they are not — giving fringe or minority views
+the same weight as mainstream or well-evidenced positions.
+
+EXAMPLES:
+- Presenting a climate scientist and a climate denier as equally credible
+- Giving equal space to a medical consensus and a discredited study
+- Framing a 97%-3% scientific split as "scientists disagree"
+- Inviting one expert and one conspiracy theorist as if they represent equal sides
+- Using "both sides" framing when evidence strongly favors one position
+
+SCORING GUIDE:
+1 = No false balance. Weight given reflects actual evidence and expert consensus.
+2 = Mild. Slight over-representation of minority view but not misleading.
+3 = Moderate. Minority position clearly elevated beyond its evidential standing.
+4 = Strong. Fringe view presented as equivalent to mainstream consensus.
+5 = Extreme. Fringe view given more weight than the consensus position.
+
+Return ONLY this JSON:
+{{
+  "score": <integer 1-5>,
+  "confidence": <integer 1-100>,
+  "reasoning": "<max 25 words>",
+  "evidence": [
+    {{
+      "phrase": "<exact phrase from article>",
+      "explanation": "<why it reflects false balance>",
+      "neutral_alternative": "<proportional version>"
+    }}
+  ]
+}}
+
+Article Title: {title}
+Article Text: {text}"""
+    },
+
+    "omission": {
+        "name": "Omission Bias",
+        "prompt": """You are an expert media bias analyst. Your only task is to analyze OMISSION BIAS.
+
+Omission bias occurs when an article leaves out information that would materially
+change the reader's understanding — not through false statements but through
+selective incompleteness.
+
+EXAMPLES:
+- Reporting a crime statistic without the base rate that would contextualise it
+- Covering a protest's violence without mentioning what triggered the protest
+- Reporting a politician's statement without mentioning their contradictory
+  statement from the previous week
+- Describing a policy's costs without mentioning its benefits, or vice versa
+- Omitting the outcome of a story that would undermine the article's framing
+
+Note: Omission bias is harder to detect than commission bias. Score conservatively —
+only flag cases where the missing information is clearly relevant and its absence
+appears deliberate rather than due to space constraints.
+
+SCORING GUIDE:
+1 = Complete. All material context present or absence is clearly space-related.
+2 = Mild. One minor omission but the article is broadly representative.
+3 = Moderate. A relevant piece of context is missing that would change interpretation.
+4 = Strong. Several key omissions that systematically favor one interpretation.
+5 = Extreme. The article is misleading specifically through what it leaves out.
+
+Return ONLY this JSON:
+{{
+  "score": <integer 1-5>,
+  "confidence": <integer 1-100>,
+  "reasoning": "<max 25 words>",
+  "evidence": [
+    {{
+      "phrase": "<exact phrase or claim from article where context is missing>",
+      "explanation": "<what is omitted and why it matters>",
+      "neutral_alternative": "<how to write it with full context>"
+    }}
+  ]
+}}
+
+Article Title: {title}
+Article Text: {text}"""
+    },
+
+    "ingroup_outgroup": {
+        "name": "In-group/Out-group Bias",
+        "prompt": """You are an expert media bias analyst. Your only task is to analyze IN-GROUP/OUT-GROUP BIAS.
+
+In-group/out-group bias occurs when an article uses language that treats some
+groups as normal, relatable, or deserving of empathy, while treating other groups
+as foreign, threatening, or less deserving of sympathy.
+
+EXAMPLES:
+- Humanizing language for one group ("families", "workers", "community") and
+  dehumanizing language for another ("illegals", "hordes", "mob")
+- Describing in-group violence as isolated incidents and out-group violence as
+  representative of the whole group
+- Using first names or personal details for in-group individuals and
+  demographic labels for out-group individuals
+- "Us" vs "them" framing in reporting
+- Describing out-group members' motives as sinister and in-group members' as
+  understandable
+
+SCORING GUIDE:
+1 = Consistent. All groups described with equivalent humanity and complexity.
+2 = Mild. Slight difference in language but not dehumanizing.
+3 = Moderate. Clear pattern of warmer language for one group.
+4 = Strong. Systematic humanization of one group and othering of another.
+5 = Extreme. Dehumanizing language used for out-group throughout.
+
+Return ONLY this JSON:
+{{
+  "score": <integer 1-5>,
+  "confidence": <integer 1-100>,
+  "reasoning": "<max 25 words>",
+  "evidence": [
+    {{
+      "phrase": "<exact phrase from article>",
+      "explanation": "<why it reflects in-group/out-group bias>",
+      "neutral_alternative": "<consistent version>"
+    }}
+  ]
+}}
+
+Article Title: {title}
+Article Text: {text}"""
     },
 
     "strengths": {
         "name": "Writing Strengths",
-        "prompt": """You are an expert media bias analyst. Your only task right now is to
-identify NEUTRAL, WELL-WRITTEN, or BALANCED phrases in this article.
+        "prompt": """You are an expert media bias analyst. Your only task is to identify
+NEUTRAL, WELL-WRITTEN, or BALANCED phrases in this article.
 
-You are NOT looking for bias. You are identifying phrases that demonstrate
-good journalistic practice — neutral language, balanced framing, or factual
-precision that avoids loaded or emotional language.
+You are NOT looking for bias. Find phrases that demonstrate good journalistic
+practice — neutral language, balanced framing, or factual precision.
 
-EXAMPLES of strong neutral writing:
+EXAMPLES:
 - "The government announced a new policy" (factual, no editorial judgment)
 - "Both parties expressed concern about the legislation" (balanced)
 - "According to official figures released Tuesday" (precise sourcing)
 - "Analysts disagree on the long-term impact" (acknowledges uncertainty)
-- "The statement could not be independently verified" (journalistic transparency)
+- "The statement could not be independently verified" (transparency)
 
-Return ONLY the following JSON and nothing else:
+Return ONLY this JSON:
 {{
   "strengths": [
-    "<exact phrase from the article that demonstrates neutral or balanced writing>"
+    "<exact phrase from article demonstrating neutral or balanced writing>"
   ]
 }}
 
-Return between 2 and 5 phrases. Only include genuinely good examples — do not
-pad the list with mediocre phrases just to reach 5.
+Return 2 to 5 phrases. Only include genuinely good examples.
 
 Article Title: {title}
-Article Text: {text}
-"""
-    },
-
-    "source_bias": {
-        "name": "Source Selection Bias",
-        "prompt": """You are an expert media bias analyst. Your only task right now is to
-analyze SOURCE SELECTION BIAS. Do not comment on any other type of bias.
-
-Source selection bias occurs when an article selectively quotes or references
-sources that support one perspective, while ignoring or minimizing opposing voices.
-
-EXAMPLES of source selection bias:
-- Only quoting experts or officials from one political party
-- Giving significantly more word count to one side's arguments
-- Using anonymous sources for criticism but named sources for defense (or vice versa)
-- Quoting a fringe figure to represent a mainstream position
-- Describing one side's sources as "experts" and the other's as "critics"
-- Citing studies that support one view while ignoring contradicting research
-
-SCORING GUIDE — read carefully before scoring:
-1 = Fully balanced. Multiple perspectives represented fairly with credible sources.
-2 = Mild imbalance. Slight lean in sourcing but opposing views are still present.
-3 = Moderate. One perspective clearly dominates. Other views mentioned briefly.
-4 = Strong. Only one perspective is sourced or validated with evidence.
-5 = Extreme. Entirely one-sided sources. No credible opposing voices included.
-
-Return ONLY the following JSON and nothing else:
-{{
-  "score": <integer 1-5>,
-  "confidence": <integer 1-100>,
-  "reasoning": "<one sentence explaining the score, max 25 words>",
-  "evidence": [
-    {{
-      "phrase": "<exact quote or reference from the article>",
-      "explanation": "<why this shows source bias>",
-      "neutral_alternative": "<what balanced sourcing would look like here>"
-    }}
-  ]
-}}
-
-Article Title: {title}
-Article Text: {text}
-"""
+Article Text: {text}"""
     }
 }
 
@@ -401,10 +669,12 @@ def analyze_text():
         if not text:
             return jsonify({"error": "No text provided"}), 400
 
-        # FIX #2 + FIX #3: run direction + sensationalism by default
+        # Run all bias prompts by default (10 total)
         requested_biases = data.get(
             "bias_types",
-            ["political_framing", "political_direction", "sensationalism", "strengths"]
+            ["framing", "political_direction", "negativity", "confirmation",
+             "anchoring", "attribution", "selection", "sensationalism",
+             "false_balance", "omission", "ingroup_outgroup", "strengths"]
         )
 
         valid_biases = [b for b in requested_biases if b in PROMPTS]
@@ -431,33 +701,37 @@ def analyze_text():
                 }
 
         # Primary framing result
-        primary    = results.get("political_framing", {})
+        primary       = results.get("framing", {})
         framing_score = primary.get("score", 1)
-        evidence   = primary.get("evidence", [])
+        evidence      = primary.get("evidence", [])
 
-        # Direction result — try multiple field names the model might use
-        direction  = results.get("political_direction", {})
+        # Direction result
+        direction    = results.get("political_direction", {})
         direction_score = (
             direction.get("direction_score")
             or direction.get("score")
             or direction.get("political_direction_score")
             or 0
         )
-        # Clamp to valid range
         direction_score = max(-100, min(100, int(direction_score)))
         direction_label = direction.get("direction_label", direction_score_to_category(direction_score))
 
-        # Sensationalism result
+        # Sensationalism
         sensationalism_score = (results.get("sensationalism", {}).get("score") or 0)
 
-        # Strengths: list of well-written phrases from the dedicated prompt
-        strengths_result = results.get("strengths", {})
-        strengths = strengths_result.get("strengths", [])
+        # Strengths
+        strengths = results.get("strengths", {}).get("strengths", [])
 
-        # Build highlighted article text
-        highlighted = build_highlighted_text(text, evidence)
+        # Build highlighted text from ALL detected bias evidence combined
+        SKIP_KEYS = {"political_direction", "strengths"}
+        all_evidence = []
+        for k, v in results.items():
+            if k not in SKIP_KEYS and (v.get("score") or 0) > 1:
+                all_evidence.extend(v.get("evidence", []))
 
-        # Map evidence to biasedPhrases shape
+        highlighted = build_highlighted_text(text, all_evidence)
+
+        # Biased phrases from framing prompt
         biased_phrases = [
             {
                 "phrase": e.get("phrase", ""),
@@ -467,37 +741,33 @@ def analyze_text():
             for e in evidence
         ]
 
-        # Build detailedBiases for dashboard charts
-        # Exclude political_direction from this list — it's directional not a presence score
+        # All detected biases with score > 1, excluding direction and strengths
+        SKIP_KEYS = {"political_direction", "strengths"}
         detailed_biases = [
             {
-                "type": v.get("bias_type", ""),
+                "type":         v.get("bias_type", ""),
+                "key":          k,
+                "score":        v.get("score", 0),
                 "presenceScore": round((v.get("score") or 0) / 5 * 100),
-                "evidence": v.get("reasoning", ""),
-                "confidence": v.get("confidence", 0),
-                "phrases": v.get("evidence", [])
+                "reasoning":    v.get("reasoning", ""),
+                "confidence":   v.get("confidence", 0),
+                "evidence":     v.get("evidence", [])
             }
             for k, v in results.items()
-            if k != "political_direction" and v.get("score") is not None
+            if k not in SKIP_KEYS
+            and v.get("score") is not None
+            and (v.get("score") or 0) > 1
         ]
 
         mapped_response = {
             "summary":             primary.get("reasoning", ""),
             "framingScore":        framing_score,
             "confidence":          primary.get("confidence", 0),
-
-            # FIX #2: biasScore now carries the real -100 to +100 direction value
             "biasScore":           direction_score,
-
-            # FIX #2: category now reflects actual left/right direction label
             "category":            direction_score_to_category(direction_score),
-
             "directionLabel":      direction_label,
             "directionConfidence": direction.get("confidence", 0),
-
-            # FIX #3: sensationalism now populated
             "sensationalismScore": sensationalism_score,
-
             "tonality":            "Neutral",
             "biasedPhrases":       biased_phrases,
             "detailedBiases":      detailed_biases,
@@ -523,7 +793,7 @@ def save_analysis():
         c = conn.cursor()
 
         c.execute('''INSERT OR REPLACE INTO analysis VALUES
-                     (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
+                     (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
                   (
                       data['id'],
                       data['timestamp'],
@@ -539,6 +809,8 @@ def save_analysis():
                       data.get('highlightedText', ''),
                       data.get('framingScore', 0),
                       data.get('confidence', 0),
+                      data.get('fullText', ''),
+                      data.get('source', ''),
                   ))
 
         conn.commit()
@@ -564,7 +836,7 @@ def get_history():
             'id', 'timestamp', 'title', 'summary', 'biasScore', 'category',
             'sensationalismScore', 'tonality', 'biasedPhrases',
             'originalTextSnippet', 'detailedBiases', 'highlightedText',
-            'framingScore', 'confidence'
+            'framingScore', 'confidence', 'fullText', 'source'
         ]
 
         results = []
@@ -608,11 +880,24 @@ def evaluate_ground_truth():
             "error": "ground_truth.py not found. Create it with your annotated articles."
         }), 404
 
+    try:
+        from ground_truth import GROUND_TRUTH, get_consensus_score
+    except ImportError:
+        return jsonify({
+            "error": "ground_truth.py not found. Create it with your annotated articles."
+        }), 404
+
     results = []
     for article in GROUND_TRUTH:
+        # Skip articles with no text or no human score yet
+        if not article.get("text", "").strip():
+            continue
+        human_score = get_consensus_score(article)
+        if human_score is None:
+            continue
+
         try:
-            ai = run_single_prompt("political_framing", article["title"], article["text"])
-            human_score = article["human_scores"]["political_framing"]
+            ai = run_single_prompt("framing", article["title"], article["text"])
             ai_score = ai.get("score") or 0
             diff = abs(human_score - ai_score)
 
@@ -620,6 +905,7 @@ def evaluate_ground_truth():
                 "id":            article["id"],
                 "title":         article["title"],
                 "source":        article.get("source", ""),
+                "topic":         article.get("topic", ""),
                 "human_score":   human_score,
                 "ai_score":      ai_score,
                 "difference":    diff,
@@ -627,8 +913,7 @@ def evaluate_ground_truth():
                 "within_1":      diff <= 1,
                 "ai_confidence": ai.get("confidence", 0),
                 "ai_reasoning":  ai.get("reasoning", ""),
-                "ai_evidence":   ai.get("evidence", []),
-                "human_notes":   article.get("human_notes", ""),
+                "human_notes":   article["human_scores"]["political_framing"].get("notes", ""),
             })
 
             time.sleep(0.5)

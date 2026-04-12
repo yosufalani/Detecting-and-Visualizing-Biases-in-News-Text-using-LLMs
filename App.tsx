@@ -37,14 +37,14 @@ const App: React.FC = () => {
 
   const exportToCSV = () => {
     if (!history.length) return;
-    const headers = ["Title", "Timestamp", "Category", "Bias Score", "Sensationalism", "Tonality", "Summary"];
+    const headers = ["Title", "Source", "Timestamp", "Category", "Framing Score", "Sensationalism", "Summary"];
     const rows = history.map(item => [
       `"${item.title.replace(/"/g, '""')}"`,
+      `"${(item.source || '').replace(/"/g, '""')}"`,
       new Date(item.timestamp).toISOString(),
       item.category,
-      item.biasScore,
+      item.framingScore,
       item.sensationalismScore,
-      `"${item.tonality.replace(/"/g, '""')}"`,
       `"${item.summary.replace(/"/g, '""')}"`
     ]);
     const csv = [headers, ...rows].map(r => r.join(",")).join("\n");
@@ -58,65 +58,116 @@ const App: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-white text-gray-900">
+    <div style={{ fontFamily: "'Georgia', 'Times New Roman', serif" }} className="min-h-screen bg-[#F8F6F1]">
 
-      {/* ── Navbar ─────────────────────────────────────── */}
-      <nav className="sticky top-0 z-50 bg-white border-b border-gray-100">
-        <div className="max-w-6xl mx-auto px-6 h-12 flex items-center justify-between">
+      {/* ── Masthead ──────────────────────────────────────────────── */}
+      <header className="border-b-2 border-[#1a1a1a]">
+        {/* Top strip */}
+        <div className="bg-[#1a1a1a] px-8 py-1.5 flex items-center justify-between">
+          <span style={{ fontFamily: "'Georgia', serif" }} className="text-[11px] text-[#999] tracking-widest uppercase">
+            Media Bias Detection System
+          </span>
+          <div className="flex items-center gap-4">
+            <span className="text-[11px] text-[#666] tracking-wider">
+              {new Date().toLocaleDateString('en-GB', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+            </span>
+            <div className="flex items-center gap-1.5">
+              <div className={`w-1.5 h-1.5 rounded-full ${isBackendOnline ? 'bg-emerald-400' : 'bg-red-500'}`} />
+              <span className="text-[11px] text-[#666]">{isBackendOnline ? 'Live' : 'Offline'}</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Nameplate */}
+        <div className="px-8 py-5 flex items-end justify-between border-b border-[#ddd]">
           <button
             onClick={() => { setView('home'); setSelectedResult(null); }}
-            className="font-semibold text-sm text-gray-900 focus:outline-none"
+            className="focus:outline-none group"
           >
-            VeriBias
+            <h1 style={{ fontFamily: "'Georgia', serif", letterSpacing: '-1px' }}
+              className="text-5xl font-bold text-[#1a1a1a] group-hover:opacity-80 transition-opacity leading-none">
+              VeriBias
+            </h1>
+            <p style={{ fontFamily: "'Georgia', serif" }} className="text-[12px] text-[#888] italic mt-1 tracking-wide">
+              Detecting the bias you weren't meant to see
+            </p>
           </button>
-          <div className="flex items-center gap-5">
-            {(['home', 'compare'] as const).map(key => (
+
+          {/* Nav */}
+          <nav className="flex items-center gap-1 pb-1">
+            {([
+              { key: 'home',    label: 'Analyse' },
+              { key: 'compare', label: 'Compare' },
+            ] as const).map(({ key, label }) => (
               <button
                 key={key}
                 onClick={() => setView(key)}
-                className={`text-sm transition-colors ${
-                  view === key ? 'text-gray-900 font-medium' : 'text-gray-400 hover:text-gray-700'
+                style={{ fontFamily: "'Georgia', serif" }}
+                className={`px-4 py-1.5 text-sm transition-all border ${
+                  view === key
+                    ? 'bg-[#1a1a1a] text-white border-[#1a1a1a]'
+                    : 'text-[#555] border-transparent hover:border-[#ccc] hover:text-[#1a1a1a]'
                 }`}
               >
-                {key === 'home' ? 'Analyze' : 'Compare'}
+                {label}
               </button>
             ))}
             <button
               onClick={exportToCSV}
               disabled={!history.length}
-              className="text-sm text-gray-400 hover:text-gray-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+              style={{ fontFamily: "'Georgia', serif" }}
+              className="px-4 py-1.5 text-sm text-[#888] hover:text-[#1a1a1a] disabled:opacity-30 disabled:cursor-not-allowed transition-colors border border-transparent hover:border-[#ccc]"
             >
               Export
             </button>
-            <div className={`w-1.5 h-1.5 rounded-full ${isBackendOnline ? 'bg-emerald-400' : 'bg-red-400'}`} />
-          </div>
+          </nav>
         </div>
-      </nav>
+      </header>
 
-      {/* ── Content ────────────────────────────────────── */}
-      <main className="max-w-6xl mx-auto px-6 py-8">
+      {/* ── Content ───────────────────────────────────────────────── */}
+      <main className="max-w-7xl mx-auto px-8 py-8">
 
         {view === 'home' && (
-          <div className="flex gap-8 items-start">
+          <div className="flex gap-10 items-start">
 
-            {/* ── Left column: analyzer + history ──────── */}
-            <div className="w-80 shrink-0 space-y-8">
+            {/* Left column */}
+            <div className="w-[320px] shrink-0 space-y-8">
 
-              <ArticleAnalyzer onResult={handleNewResult} />
-
-              {history.length > 0 && (
-              <div className="pt-4 border-t border-gray-100">
-                <HistoryList
-                  history={history}
-                  onDelete={handleDelete}
-                  onSelect={r => setSelectedResult(r)}
-                />
+              {/* Section rule */}
+              <div>
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="h-px flex-1 bg-[#1a1a1a]" />
+                  <span style={{ fontFamily: "'Georgia', serif" }}
+                    className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#1a1a1a]">
+                    New Analysis
+                  </span>
+                  <div className="h-px flex-1 bg-[#1a1a1a]" />
+                </div>
+                <ArticleAnalyzer onResult={handleNewResult} />
               </div>
-            )}
 
+              {/* History */}
+              {history.length > 0 && (
+                <div>
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className="h-px flex-1 bg-[#ccc]" />
+                    <span style={{ fontFamily: "'Georgia', serif" }}
+                      className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#888]">
+                      Previous Analyses
+                    </span>
+                    <div className="h-px flex-1 bg-[#ccc]" />
+                  </div>
+                  <HistoryList
+                    history={history}
+                    onDelete={handleDelete}
+                    onSelect={r => setSelectedResult(r)}
+                    selectedId={selectedResult?.id}
+                  />
+                </div>
+              )}
             </div>
 
-            {/* ── Right column: result ──────────────────── */}
+            {/* Right column — result */}
             <div className="flex-1 min-w-0">
               {selectedResult ? (
                 <ResultView
@@ -124,8 +175,11 @@ const App: React.FC = () => {
                   onClose={() => setSelectedResult(null)}
                 />
               ) : (
-                <div className="h-64 flex items-center justify-center">
-                  <p className="text-sm text-gray-300">Results will appear here</p>
+                <div className="flex flex-col items-center justify-center h-96 border border-dashed border-[#ccc]">
+                  <p style={{ fontFamily: "'Georgia', serif" }}
+                    className="text-[#bbb] text-sm italic">
+                    Analysis results will appear here
+                  </p>
                 </div>
               )}
             </div>
@@ -138,6 +192,20 @@ const App: React.FC = () => {
         )}
 
       </main>
+
+      {/* ── Footer ────────────────────────────────────────────────── */}
+      <footer className="border-t-2 border-[#1a1a1a] mt-16 px-8 py-6">
+        <div className="max-w-7xl mx-auto flex items-center justify-between">
+          <span style={{ fontFamily: "'Georgia', serif" }}
+            className="text-[11px] text-[#aaa] italic">
+            VeriBias — University of Stavanger · Bachelor's Thesis 2026
+          </span>
+          <span style={{ fontFamily: "'Georgia', serif" }}
+            className="text-[11px] text-[#aaa]">
+            For research purposes only
+          </span>
+        </div>
+      </footer>
 
     </div>
   );

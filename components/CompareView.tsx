@@ -131,12 +131,22 @@ const CompareView: React.FC<CompareViewProps> = ({ history }) => {
     setRightResult(null);
 
     try {
+      const textToAnalyse = (selectedArticle as any).fullText
+        || selectedArticle.originalTextSnippet
+        || '';
+
+      if (!textToAnalyse || textToAnalyse.length < 50) {
+        setError('Full article text not available for this entry. Re-analyse the article to enable comparison.');
+        setLoading(false);
+        return;
+      }
+
       const [leftRes, rightRes] = await Promise.all([
         fetch(`${API_BASE}/analyze`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            text:  selectedArticle.originalTextSnippet,
+            text:  textToAnalyse,
             title: selectedArticle.title,
             model: leftModel,
           }),
@@ -145,7 +155,7 @@ const CompareView: React.FC<CompareViewProps> = ({ history }) => {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            text:  selectedArticle.originalTextSnippet,
+            text:  textToAnalyse,
             title: selectedArticle.title,
             model: rightModel,
           }),

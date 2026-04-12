@@ -10,6 +10,7 @@ type Model = 'gemini' | 'claude';
 
 const ArticleAnalyzer: React.FC<ArticleAnalyzerProps> = ({ onResult }) => {
   const [title,   setTitle]   = useState('');
+  const [source,  setSource]  = useState('');
   const [content, setContent] = useState('');
   const [loading, setLoading] = useState(false);
   const [error,   setError]   = useState('');
@@ -20,9 +21,10 @@ const ArticleAnalyzer: React.FC<ArticleAnalyzerProps> = ({ onResult }) => {
     setLoading(true);
     setError('');
     try {
-      const result = await runAnalysis(content, title || 'Untitled Article', model);
+      const result = await runAnalysis(content, title || 'Untitled Article', model, source);
       onResult(result);
       setTitle('');
+      setSource('');
       setContent('');
     } catch {
       setError('Analysis failed. Check your API key and backend status.');
@@ -32,16 +34,25 @@ const ArticleAnalyzer: React.FC<ArticleAnalyzerProps> = ({ onResult }) => {
   };
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
 
-      {/* Title input */}
-      <input
-        type="text"
-        value={title}
-        onChange={e => setTitle(e.target.value)}
-        placeholder="Article title (optional)"
-        className="w-full px-4 py-2.5 text-sm border border-gray-200 rounded-lg outline-none focus:border-gray-400 transition-colors placeholder:text-gray-300 bg-white"
-      />
+      {/* Title + Source side by side */}
+      <div className="flex gap-2">
+        <input
+          type="text"
+          value={title}
+          onChange={e => setTitle(e.target.value)}
+          placeholder="Article title (optional)"
+          className="flex-1 px-4 py-2.5 text-sm border border-gray-200 rounded-lg outline-none focus:border-gray-400 transition-colors placeholder:text-gray-300 bg-white"
+        />
+        <input
+          type="text"
+          value={source}
+          onChange={e => setSource(e.target.value)}
+          placeholder="Source (e.g. BBC)"
+          className="w-36 px-4 py-2.5 text-sm border border-gray-200 rounded-lg outline-none focus:border-gray-400 transition-colors placeholder:text-gray-300 bg-white"
+        />
+      </div>
 
       {/* Article text */}
       <textarea
@@ -51,10 +62,8 @@ const ArticleAnalyzer: React.FC<ArticleAnalyzerProps> = ({ onResult }) => {
         className="w-full h-48 px-4 py-3 text-sm border border-gray-200 rounded-lg outline-none focus:border-gray-400 transition-colors resize-none placeholder:text-gray-300 bg-white"
       />
 
-      {/* Bottom row: model selector + button */}
+      {/* Model selector + button */}
       <div className="flex items-center gap-3">
-
-        {/* Model toggle — small and subtle */}
         <div className="flex rounded-md border border-gray-200 overflow-hidden text-xs shrink-0">
           {(['gemini', 'claude'] as Model[]).map(m => (
             <button
@@ -72,7 +81,6 @@ const ArticleAnalyzer: React.FC<ArticleAnalyzerProps> = ({ onResult }) => {
           ))}
         </div>
 
-        {/* Run button */}
         <button
           onClick={handleAnalyze}
           disabled={loading || !content.trim()}

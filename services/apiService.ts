@@ -24,12 +24,12 @@ export async function fetchHistory(): Promise<AnalysisResult[]> {
   return saved ? JSON.parse(saved) : [];
 }
 
-export async function runAnalysis(text: string, title: string, model: "gemini" | "claude" = "gemini"): Promise<AnalysisResult> {
+export async function runAnalysis(text: string, title: string, model: "gemini" | "claude" = "gemini", source: string = ""): Promise<AnalysisResult> {
 
   const response = await fetch(`${API_BASE}/analyze`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ text, title, model }),
+    body: JSON.stringify({ text, title, model, source }),
   });
 
   if (!response.ok) {
@@ -43,6 +43,8 @@ export async function runAnalysis(text: string, title: string, model: "gemini" |
     id: crypto.randomUUID(),
     timestamp: Date.now(),
     title: title || "Untitled Article",
+    source: source || "",
+    fullText: text,
     originalTextSnippet: text.slice(0, 200) + "..."
   };
 
