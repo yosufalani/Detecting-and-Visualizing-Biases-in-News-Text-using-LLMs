@@ -6,8 +6,6 @@ This project presents a full-stack application for detecting, analyzing, and vis
 
 The system performs structured bias auditing and presents results through interactive visualizations. It combines AI-powered analysis with frontend data visualization to make media bias more transparent and interpretable.
 
----
-
 ## Problem Statement
 
 News media plays a central role in shaping public opinion. Articles may contain subtle or explicit bias through framing, omission, emotional amplification, or selective sourcing.
@@ -15,8 +13,6 @@ News media plays a central role in shaping public opinion. Articles may contain 
 Traditional fact-checking focuses on truthfulness. This project instead focuses on:
 
 > How can we systematically detect, measure, and visualize bias patterns in news articles using modern language models?
-
----
 
 ## System Architecture
 
@@ -41,8 +37,6 @@ Traditional fact-checking focuses on truthfulness. This project instead focuses 
 - Large Language Model for structured bias evaluation
 - Strict JSON output enforcement
 - Multi-step evaluation rubric
-
----
 
 ## Bias Evaluation Framework
 
@@ -70,8 +64,6 @@ Additionally, the system:
 - Suggests neutral alternatives
 - Generates highlighted bias annotations
 
----
-
 ## Features
 
 - Structured LLM bias auditing
@@ -83,8 +75,6 @@ Additionally, the system:
 - Persistent analysis history (SQLite)
 - Strict JSON enforcement for reliable parsing
 - Clean separation of frontend and backend
-
----
 
 ## Technology Stack
 
@@ -104,13 +94,9 @@ Other:
 - Structured prompt engineering
 - JSON schema enforcement
 
----
-
 # Running the Application
 
 This project consists of a backend (Flask + Python) and a frontend (React + Vite). Both must be running simultaneously.
-
----
 
 ## 1. Clone the Repository
 
