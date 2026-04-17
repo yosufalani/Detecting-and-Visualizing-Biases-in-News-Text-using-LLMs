@@ -23,7 +23,7 @@ if not api_key:
 
 client = genai.Client(api_key=api_key)
 
-# Claude client — optional, only needed for Claude model selection
+# Claude client -- optional, only needed for Claude model selection
 try:
     import anthropic
     claude_client = anthropic.Anthropic(api_key=claude_api_key) if claude_api_key else None
@@ -79,42 +79,67 @@ def init_db():
 init_db()
 
 # -------------------------
-# PROMPTS — one per bias type
+# PROMPTS -- one per bias type
 # -------------------------
 
 PROMPTS = {
 
     "framing": {
         "name": "Framing Bias",
-        "prompt": """You are an expert media bias analyst. Your only task is to analyze FRAMING BIAS.
+        "prompt": """You are an expert media bias analyst. Your ONLY task is to detect FRAMING BIAS.
 
-Framing bias occurs when word choices or narrative structure favor one perspective
-over another without stating anything factually false.
+DEFINITION: Framing bias is the use of word choices or narrative structure that favour one political perspective over another, without stating anything factually false. It operates through loaded language, not lies.
 
-EXAMPLES:
-- "Tax relief" vs "tax cuts" — the first implies taxes are a burden
-- "Illegal aliens" vs "undocumented immigrants" vs "migrants"
-- Describing a protest as a "riot" vs a "demonstration"
-- "Job creators" vs "the wealthy" for the same group
-- "Government spending" vs "public investment"
+DO NOT flag: sensationalism, negativity, omissions, or source choices. Those are separate bias types. Only flag word-level or phrase-level framing choices here.
+
+SIGNAL EXAMPLES:
+- "tax relief" (implies taxes are a burden) vs neutral "tax cuts"
+- "illegal aliens" vs neutral "undocumented migrants"
+- "riot" vs neutral "protest" or "demonstration"
+- "job creators" vs neutral "wealthy individuals" or "high earners"
+- "pro-life" / "pro-choice" vs neutral "anti-abortion" / "pro-abortion-rights"
+- "government handouts" vs neutral "welfare payments"
 
 SCORING GUIDE:
-1 = No framing bias. Fully neutral language throughout.
-2 = Mild. One or two loaded words, overall balanced.
-3 = Moderate. Clear pattern leaning one direction.
-4 = Strong. Consistent one-sided framing throughout.
-5 = Extreme. Reads as messaging, not journalism.
+1 = No framing. Neutral language used consistently throughout.
+2 = Mild. One or two loaded words that lean one direction; overall language is balanced.
+3 = Moderate. A clear pattern of loaded language favouring one side across multiple paragraphs.
+4 = Strong. Loaded language is consistent and sustained throughout the article.
+5 = Extreme. The article reads as political messaging. Neutral description is absent.
 
-Return ONLY this JSON:
+WORKED EXAMPLE -- score 4:
+Article excerpt: "The radical left's open borders agenda has flooded American communities with illegal aliens, devastating local taxpayers and emboldening criminal networks."
+Output:
+{{
+  "score": 4,
+  "confidence": 91,
+  "reasoning": "Three phrases in one sentence all carry strong right-wing framing: 'radical left', 'open borders agenda', and 'illegal aliens'. The pattern is consistent, not incidental.",
+  "evidence": [
+    {{
+      "phrase": "radical left's open borders agenda",
+      "explanation": "'Radical left' is a political attack label. 'Open borders agenda' misrepresents most immigration policy positions as extreme.",
+      "neutral_alternative": "the Democratic Party's immigration proposals"
+    }},
+    {{
+      "phrase": "illegal aliens",
+      "explanation": "Legally loaded term. 'Undocumented migrants' or 'undocumented immigrants' is the neutral equivalent.",
+      "neutral_alternative": "undocumented migrants"
+    }}
+  ]
+}}
+
+PHRASE INSTRUCTION: Return the SHORTEST phrase that contains the framing signal -- a word or short phrase, not a full sentence. If the signal is a single word, return that word in context (3-6 words around it).
+
+Return ONLY valid JSON with no markdown:
 {{
   "score": <integer 1-5>,
   "confidence": <integer 1-100>,
-  "reasoning": "<max 25 words>",
+  "reasoning": "<max 45 words explaining the pattern, not just repeating the score>",
   "evidence": [
     {{
-      "phrase": "<exact phrase from article>",
-      "explanation": "<why it is framing bias>",
-      "neutral_alternative": "<neutral version>"
+      "phrase": "<shortest phrase containing the framing signal>",
+      "explanation": "<why this specific phrase is framing bias>",
+      "neutral_alternative": "<neutral replacement for this phrase only>"
     }}
   ]
 }}
@@ -125,24 +150,32 @@ Article Text: {text}"""
 
     "political_direction": {
         "name": "Political Direction",
-        "prompt": """You are an expert media bias analyst. Your only task is to determine
-the POLITICAL DIRECTION of any bias found in this article.
+        "prompt": """You are an expert media bias analyst. Your ONLY task is to determine the POLITICAL DIRECTION of any bias in this article.
 
-You are NOT scoring how biased the article is. You are ONLY determining which
-direction the bias leans, if any. Scale: -100 (Far Left) to +100 (Far Right).
+You are NOT scoring how biased the article is. You are ONLY determining which direction the bias leans. Use the full -100 to +100 scale. Do not cluster near 0 unless the article is genuinely centrist.
 
-LEFT signals: progressive framing, sympathetic to regulation/immigration/labor,
-terms like "undocumented immigrants", "reproductive rights", "gun safety".
+SCALE ANCHORS:
+-100 = Far Left: explicitly advocates socialist/progressive positions, uses movement language, treats right-wing views as illegitimate
+-70  = Left: consistent progressive framing, sympathetic sourcing from left-aligned organisations, uses left-coded terminology throughout
+-40  = Center-Left: mild but consistent left lean; mostly neutral but word choices and source selection favour progressive framing
+0    = Center: genuinely balanced. Both sides framed with equal respect and skepticism.
++40  = Center-Right: mild but consistent right lean; mostly neutral but favours conservative framing and sources
++70  = Right: consistent conservative framing, sympathetic to right-aligned sources, uses right-coded terminology throughout
++100 = Far Right: explicitly advocates conservative/nationalist positions, treats left-wing views as illegitimate
 
-RIGHT signals: conservative framing, sympathetic to deregulation/border control/military,
-terms like "illegal aliens", "pro-life", "tax relief", "radical left".
+LEFT SIGNALS: "undocumented immigrants", "reproductive rights", "gun safety", "climate crisis", "systemic racism", "communities of colour", quoting NGOs/unions/activists without challenge
 
-Return ONLY this JSON:
+RIGHT SIGNALS: "illegal aliens", "pro-life", "tax relief", "radical left", "open borders", "law and order", "hardworking taxpayers", quoting think tanks/law enforcement/business groups without challenge
+
+WORKED EXAMPLE -- score +65:
+Article about immigration uses "illegal aliens" three times, quotes only Border Patrol officials, describes migrants as "flooding" the country, and frames enforcement as "protecting American communities". Direction score: +65 (Right).
+
+Return ONLY valid JSON with no markdown:
 {{
   "direction_score": <integer -100 to +100>,
   "direction_label": "<Far Left | Left | Center-Left | Center | Center-Right | Right | Far Right>",
   "confidence": <integer 1-100>,
-  "reasoning": "<max 25 words>"
+  "reasoning": "<max 45 words: name the specific signals that determined the direction>"
 }}
 
 Article Title: {title}
@@ -151,36 +184,42 @@ Article Text: {text}"""
 
     "negativity": {
         "name": "Negativity Bias",
-        "prompt": """You are an expert media bias analyst. Your only task is to analyze NEGATIVITY BIAS.
+        "prompt": """You are an expert media bias analyst. Your ONLY task is to detect NEGATIVITY BIAS.
 
-Negativity bias occurs when an article disproportionately focuses on negative
-aspects, threats, failures, or bad outcomes — even when positive or neutral
-information is equally relevant or available.
+DEFINITION: Negativity bias is the disproportionate emphasis on negative aspects, threats, failures, or worst-case outcomes -- even when positive or neutral information is equally available and relevant.
 
-EXAMPLES:
-- Covering only failures of a policy while ignoring successes
-- Leading with worst-case scenarios without mentioning likely outcomes
-- Using negative emotional language where neutral language would suffice
-- Selecting statistics that emphasize decline over improvement
-- Consistently framing ambiguous situations as threats or problems
+DO NOT flag: loaded political word choices (that is framing bias), sensationalist language (that is sensationalism). Only flag the disproportionate selection and emphasis of negative information here.
+
+SIGNAL EXAMPLES:
+- Reporting only policy failures while ignoring documented successes
+- Opening with worst-case projections without mentioning the base-case or likely outcomes
+- Selecting decline statistics when improvement statistics are equally valid
+- Consistently describing ambiguous situations as threats or crises
+- Ending every section with a negative consequence, even when positives are available
 
 SCORING GUIDE:
-1 = Balanced. Positive, negative, and neutral information treated equally.
-2 = Mild. Slight negative lean but broadly representative.
-3 = Moderate. Negative framing dominates but some balance present.
-4 = Strong. Consistently negative. Positive information minimized or omitted.
-5 = Extreme. Entirely negative framing regardless of actual events.
+1 = Balanced. Article includes negative, positive, and neutral information proportionately.
+2 = Mild. Slight negative lean; mostly representative but positive information underweighted.
+3 = Moderate. Negative information consistently dominates; positive context present but minimised.
+4 = Strong. Article is almost entirely negative. Positive information absent or dismissed.
+5 = Extreme. Every claim is framed negatively regardless of what the underlying facts support.
 
-Return ONLY this JSON:
+WORKED EXAMPLE -- score 3:
+An economic article reports three consecutive quarters of job losses prominently, mentions record employment in one clause, then returns to housing cost increases, wage stagnation, and recession risk. The underlying data is mixed but the article reads as uniformly bleak.
+Output: score 3, evidence phrase: "wages have stagnated even as costs surge", neutral_alternative: "wages have grown more slowly than costs in recent quarters".
+
+PHRASE INSTRUCTION: Return the SHORTEST phrase that shows the negative framing -- the specific word or clause that tilts the sentence negative, not the full paragraph.
+
+Return ONLY valid JSON with no markdown:
 {{
   "score": <integer 1-5>,
   "confidence": <integer 1-100>,
-  "reasoning": "<max 25 words>",
+  "reasoning": "<max 45 words: explain the pattern of negative selection, not just individual words>",
   "evidence": [
     {{
-      "phrase": "<exact phrase from article>",
-      "explanation": "<why it reflects negativity bias>",
-      "neutral_alternative": "<more balanced version>"
+      "phrase": "<shortest phrase showing the negative framing>",
+      "explanation": "<why this reflects disproportionate negativity, not just accurate reporting>",
+      "neutral_alternative": "<balanced version of this phrase>"
     }}
   ]
 }}
@@ -191,36 +230,42 @@ Article Text: {text}"""
 
     "confirmation": {
         "name": "Confirmation Bias",
-        "prompt": """You are an expert media bias analyst. Your only task is to analyze CONFIRMATION BIAS.
+        "prompt": """You are an expert media bias analyst. Your ONLY task is to detect CONFIRMATION BIAS.
 
-Confirmation bias in journalism occurs when an article selectively presents
-information that confirms a pre-existing narrative or conclusion, while
-downplaying or omitting contradicting evidence.
+DEFINITION: Confirmation bias in journalism is the structural tendency to present evidence that confirms a predetermined conclusion while minimising, dismissing, or omitting contradicting evidence. It is about the architecture of the argument, not word choice.
 
-EXAMPLES:
-- Presenting only evidence that supports a predetermined conclusion
-- Treating confirming sources as authoritative and contradicting sources as fringe
-- Framing ambiguous data as conclusive proof of one interpretation
-- Ignoring studies or events that complicate the article's implied argument
-- Structuring the article so the conclusion is assumed from the opening paragraph
+DO NOT flag: loaded language (framing bias), source selection patterns (selection bias), or omissions of context (omission bias). Those are separate categories. Focus here on how the article handles evidence that confirms vs challenges its implied conclusion.
+
+SIGNAL EXAMPLES:
+- Quoting experts who confirm the narrative as authoritative; dismissing those who contradict it as "controversial" or "disputed"
+- Treating ambiguous data as conclusive proof of one interpretation
+- Presenting the conclusion in the opening paragraph, then assembling only supporting evidence
+- Acknowledging a counterargument in one sentence, then spending four paragraphs rebutting it with confirming evidence
+- Framing confirmatory studies as definitive while framing contradictory studies as preliminary
 
 SCORING GUIDE:
-1 = No confirmation bias. Evidence presented openly regardless of direction.
-2 = Mild. Slight tendency to favor one interpretation but contradictions acknowledged.
-3 = Moderate. Clear narrative being confirmed. Contradictions minimized.
-4 = Strong. Article is structured to prove a conclusion. Contradictions absent.
-5 = Extreme. Only confirming evidence included. Reads as advocacy.
+1 = Open. Evidence presented regardless of direction; article tolerates uncertainty.
+2 = Mild. Slight tendency to favour one interpretation; contradictions present but briefly treated.
+3 = Moderate. Clear narrative being confirmed; contradictions acknowledged but consistently minimised.
+4 = Strong. Article structured to prove a conclusion; contradictions absent or framed as fringe.
+5 = Extreme. Only confirming evidence present. Reads as a brief for one side.
 
-Return ONLY this JSON:
+WORKED EXAMPLE -- score 4:
+Article about vaccine safety: opens with three paragraphs on rare adverse events, quotes two scientists who share concerns, mentions "some studies show no link" in a single subordinate clause, then returns to more adverse event data. The clinical consensus is not mentioned.
+Evidence phrase: "some studies show no link", explanation: "This single clause is the only acknowledgment of the clinical consensus; everything else confirms the adverse-event narrative."
+
+PHRASE INSTRUCTION: The most useful evidence for confirmation bias is often the phrase where contradicting evidence IS acknowledged but immediately minimised -- find that phrase. If no contradicting evidence appears at all, note a phrase where it should have appeared.
+
+Return ONLY valid JSON with no markdown:
 {{
   "score": <integer 1-5>,
   "confidence": <integer 1-100>,
-  "reasoning": "<max 25 words>",
+  "reasoning": "<max 45 words: describe the structural pattern, not just individual phrases>",
   "evidence": [
     {{
-      "phrase": "<exact phrase from article>",
-      "explanation": "<why it reflects confirmation bias>",
-      "neutral_alternative": "<more open-ended version>"
+      "phrase": "<phrase where contradicting evidence is minimised, or where it should appear>",
+      "explanation": "<why this reflects selective evidence architecture>",
+      "neutral_alternative": "<how a balanced treatment would handle this>"
     }}
   ]
 }}
@@ -231,36 +276,42 @@ Article Text: {text}"""
 
     "anchoring": {
         "name": "Anchoring Bias",
-        "prompt": """You are an expert media bias analyst. Your only task is to analyze ANCHORING BIAS.
+        "prompt": """You are an expert media bias analyst. Your ONLY task is to detect ANCHORING BIAS.
 
-Anchoring bias occurs when an article establishes an initial reference point
-(a number, claim, or framing) that disproportionately influences how subsequent
-information is interpreted by the reader.
+DEFINITION: Anchoring bias occurs when an article establishes an initial reference point -- a number, claim, or characterisation -- that disproportionately shapes how the reader interprets everything that follows, regardless of whether that anchor is representative or justified.
 
-EXAMPLES:
-- Opening with an extreme statistic that makes moderate figures seem small
-- Introducing the most dramatic claim first, making other claims seem minor by comparison
-- Using a specific number as a baseline without justifying why that baseline was chosen
-- Framing a policy cost as "only X" or "as much as X" to set an emotional anchor
-- Establishing a villain or hero in the opening that colors the rest of the article
+DO NOT flag: sensationalist language (sensationalism), loaded word choices (framing), or missing context (omission). Only flag cases where the specific placement or framing of an opening claim functions as a distorting anchor.
+
+SIGNAL EXAMPLES:
+- Opening with the most extreme statistic available, making moderate figures seem small by comparison
+- Establishing the article's subject as a villain or hero in the first sentence, colouring all subsequent information
+- Introducing a large cost figure without immediately providing the relevant baseline or comparison
+- Using "as many as X" or "at least X" to set a ceiling or floor that frames subsequent figures
+- Framing an outcome as a catastrophe in the headline, then walking it back in paragraph 8
 
 SCORING GUIDE:
-1 = No anchoring. Information introduced in a neutral, contextualised order.
-2 = Mild. One anchoring element but it does not strongly distort interpretation.
-3 = Moderate. Anchoring clearly shapes how subsequent information reads.
-4 = Strong. The anchor dominates and makes balanced interpretation difficult.
-5 = Extreme. The entire article is structured around a manipulative anchor.
+1 = No anchoring. Information ordered neutrally; opening claims are proportionate and contextualised.
+2 = Mild. One anchoring element that slightly colours interpretation but does not dominate.
+3 = Moderate. The anchor clearly shapes how subsequent information reads; a different opening would change the article's feel significantly.
+4 = Strong. The anchor is the organising principle of the article; balanced interpretation is difficult.
+5 = Extreme. The anchor is manipulative. The rest of the article exists to reinforce it.
 
-Return ONLY this JSON:
+WORKED EXAMPLE -- score 3:
+Article opens: "With over 50,000 deaths already attributed to the policy, analysts are now questioning..." The 50,000 figure is the highest estimate from one study; the median estimate is 12,000. Opening with the maximum anchors the reader before any context is provided.
+Evidence phrase: "over 50,000 deaths already attributed", neutral_alternative: "estimates of deaths attributed to the policy range from 12,000 to 50,000 depending on methodology".
+
+PHRASE INSTRUCTION: The anchor is almost always in the opening paragraph or headline. Return the specific claim or figure that functions as the anchor.
+
+Return ONLY valid JSON with no markdown:
 {{
   "score": <integer 1-5>,
   "confidence": <integer 1-100>,
-  "reasoning": "<max 25 words>",
+  "reasoning": "<max 45 words: explain what the anchor is and how it distorts interpretation of what follows>",
   "evidence": [
     {{
-      "phrase": "<exact phrase from article>",
-      "explanation": "<why it functions as an anchor>",
-      "neutral_alternative": "<more contextualised version>"
+      "phrase": "<the specific anchoring claim or figure>",
+      "explanation": "<why this functions as a distorting anchor>",
+      "neutral_alternative": "<a contextualised version of this opening claim>"
     }}
   ]
 }}
@@ -271,39 +322,42 @@ Article Text: {text}"""
 
     "attribution": {
         "name": "Attribution Bias",
-        "prompt": """You are an expert media bias analyst. Your only task is to analyze ATTRIBUTION BIAS.
+        "prompt": """You are an expert media bias analyst. Your ONLY task is to detect ATTRIBUTION BIAS.
 
-Attribution bias occurs when an article applies different standards of explanation
-to different groups — attributing the same behavior to character flaws in one
-group while excusing it as circumstance in another.
+DEFINITION: Attribution bias occurs when an article applies different standards of explanation to comparable behaviour by different groups -- attributing the same action to character or ideology in one group while attributing it to circumstance or systemic factors in another.
 
-EXAMPLES:
-- Explaining one politician's mistakes as personal failure while explaining
-  another's as systemic pressure
-- Attributing violence by one group to ideology while attributing the same
-  behavior by another group to poverty or mental illness
-- Describing protests by favored groups as "demonstrations" and by disfavored
-  groups as "mobs"
-- Using passive voice to downplay agency of favored actors ("mistakes were made")
-  while using active voice to emphasize agency of disfavored actors
+DO NOT flag: general loaded language (framing bias) or in-group/out-group language (separate category). Only flag cases where the SAME TYPE OF BEHAVIOUR receives asymmetric causal explanation depending on who is doing it.
+
+SIGNAL EXAMPLES:
+- Politician A's policy failure explained as personal incompetence; Politician B's identical failure explained as systemic constraints
+- Violence by Group X attributed to their ideology or culture; violence by Group Y attributed to poverty, mental illness, or provocation
+- Protests by favoured group described as "demonstrations"; protests by disfavoured group described as "mobs" or "riots"
+- Passive voice for in-group agency ("mistakes were made"); active voice for out-group agency ("they attacked")
+- Quoting in-group members' intentions at face value; speculating about out-group members' hidden motives
 
 SCORING GUIDE:
-1 = Consistent. Same standards of explanation applied to all groups.
-2 = Mild. Slight inconsistency but not systematically applied.
-3 = Moderate. Clear double standard visible across the article.
-4 = Strong. Systematic different attribution applied throughout.
-5 = Extreme. One group entirely absolved, another entirely blamed.
+1 = Consistent. Same causal standards applied to all groups throughout.
+2 = Mild. One instance of asymmetric attribution; may be incidental.
+3 = Moderate. A clear double standard visible across two or more comparisons.
+4 = Strong. Systematic asymmetry throughout the article -- one group's actions are always explained charitably, the other's are not.
+5 = Extreme. The article consistently exculpates one group and pathologises the other.
 
-Return ONLY this JSON:
+WORKED EXAMPLE -- score 3:
+Article covers two protests on the same day. Pro-government protesters are described as "concerned citizens who gathered peacefully to voice their views". Anti-government protesters are described as "agitators who disrupted the city". Same behaviour; opposite framing of character and intent.
+Evidence phrase: "agitators who disrupted", neutral_alternative: "protesters who gathered in opposition".
+
+PHRASE INSTRUCTION: Return the phrase that shows the asymmetric treatment -- ideally one that contrasts directly with how the comparable group is described elsewhere in the same article.
+
+Return ONLY valid JSON with no markdown:
 {{
   "score": <integer 1-5>,
   "confidence": <integer 1-100>,
-  "reasoning": "<max 25 words>",
+  "reasoning": "<max 45 words: identify the two groups and explain the asymmetry>",
   "evidence": [
     {{
-      "phrase": "<exact phrase from article>",
-      "explanation": "<why it reflects attribution bias>",
-      "neutral_alternative": "<consistent version>"
+      "phrase": "<phrase showing asymmetric attribution>",
+      "explanation": "<what the asymmetry is and which comparable behaviour it contrasts with>",
+      "neutral_alternative": "<consistent version applying the same standard>"
     }}
   ]
 }}
@@ -314,36 +368,42 @@ Article Text: {text}"""
 
     "selection": {
         "name": "Selection Bias",
-        "prompt": """You are an expert media bias analyst. Your only task is to analyze SELECTION BIAS.
+        "prompt": """You are an expert media bias analyst. Your ONLY task is to detect SELECTION BIAS.
 
-Selection bias occurs when an article selectively quotes or references sources
-that support one perspective while ignoring or minimizing opposing voices.
+DEFINITION: Selection bias is the pattern of which facts, sources, statistics, and voices are included in an article -- and which are systematically excluded. It shapes the narrative through presence and absence, not through word choice.
 
-EXAMPLES:
-- Only quoting experts from one political party
-- Giving significantly more space to one side's arguments
-- Using anonymous sources for criticism but named sources for defense
-- Quoting a fringe figure to represent a mainstream position
-- Describing one side's sources as "experts" and the other's as "critics"
-- Citing only studies that support one view
+DO NOT flag: how sources are described (attribution bias), loaded language (framing bias), or what context is missing from individual claims (omission bias). Focus here on the overall pattern of who and what was chosen to appear in the article.
+
+SIGNAL EXAMPLES:
+- Quoting only sources from one side of a debate (e.g. only government officials, or only critics)
+- Selecting statistics from one dataset when multiple datasets with different results are available
+- Covering events that support one narrative while ignoring comparable events that contradict it
+- Choosing which experts to quote -- and from which institutions
+- Featuring personal stories that are emotionally representative of one position only
 
 SCORING GUIDE:
-1 = Fully balanced. Multiple perspectives represented fairly.
-2 = Mild imbalance. Slight lean but opposing views present.
-3 = Moderate. One perspective clearly dominates.
-4 = Strong. Only one perspective sourced or validated.
-5 = Extreme. Entirely one-sided. No credible opposing voices.
+1 = Balanced. Sources, statistics, and perspectives represent the full range of relevant views.
+2 = Mild. Slight imbalance in sourcing; one perspective marginally over-represented.
+3 = Moderate. Clear pattern: one side gets more voices, more credible sources, or more space.
+4 = Strong. Article almost entirely sourced from one side. Opposing voices absent or tokenistic.
+5 = Extreme. Entirely one-sided sourcing. No attempt to represent alternative perspectives.
 
-Return ONLY this JSON:
+WORKED EXAMPLE -- score 4:
+Immigration article quotes five Border Patrol agents, two Republican senators, and one anonymous "administration official". No migrants, immigration lawyers, advocacy organisations, or Democratic voices are quoted. The sourcing pattern is not incidental -- it structures the entire article.
+Evidence phrase: "[quotes Border Patrol agent X, Y, Z, senators A, B]", neutral_alternative: "include voices from affected communities and legal advocates alongside enforcement perspectives".
+
+PHRASE INSTRUCTION: For selection bias, the evidence is often a sourcing pattern rather than a single phrase. Return the quote attribution or the description of sources used (e.g. "according to Border Patrol officials") that best illustrates the selection pattern.
+
+Return ONLY valid JSON with no markdown:
 {{
   "score": <integer 1-5>,
   "confidence": <integer 1-100>,
-  "reasoning": "<max 25 words>",
+  "reasoning": "<max 45 words: describe the overall sourcing pattern and what is systematically missing>",
   "evidence": [
     {{
-      "phrase": "<exact phrase from article>",
-      "explanation": "<why this shows selection bias>",
-      "neutral_alternative": "<what balanced sourcing would look like>"
+      "phrase": "<quote attribution or source description that illustrates the selection pattern>",
+      "explanation": "<why this sourcing choice reflects systematic selection bias>",
+      "neutral_alternative": "<what balanced sourcing would include instead>"
     }}
   ]
 }}
@@ -354,35 +414,45 @@ Article Text: {text}"""
 
     "sensationalism": {
         "name": "Sensationalism",
-        "prompt": """You are an expert media bias analyst. Your only task is to analyze SENSATIONALISM.
+        "prompt": """You are an expert media bias analyst. Your ONLY task is to detect SENSATIONALISM.
 
-Sensationalism occurs when language exaggerates or uses emotional triggers to
-provoke reaction rather than inform.
+DEFINITION: Sensationalism is the use of dramatic, emotionally charged, or exaggerated language to provoke a strong reaction rather than to inform accurately. It is about tone and word choice, not political direction.
 
-EXAMPLES:
-- "Explosive revelations" instead of "new information"
-- "Bombshell report" for a routine story
-- "Crisis" applied to minor problems
-- Excessive adjectives: "shocking", "devastating", "terrifying"
-- Vague alarming claims: "sources say it could be catastrophic"
+DO NOT flag: politically loaded language (framing bias) or negative information selection (negativity bias). Sensationalism can appear in politically neutral articles. Focus on language that prioritises emotional impact over factual precision.
+
+SIGNAL EXAMPLES:
+- "Bombshell", "explosive", "shocking", "devastating", "terrifying" -- dramatic adjectives where neutral ones would suffice
+- "Crisis" applied to situations that are serious but not acute emergencies
+- Vague alarming claims: "experts warn it could be catastrophic"
+- Hyperbolic verbs: "slams", "torches", "destroys", "obliterates" for routine criticism
+- Superlatives without basis: "the worst ever", "unprecedented" for common events
+- Headlines that overstate what the article actually reports
 
 SCORING GUIDE:
-1 = No sensationalism. Measured, factual tone throughout.
-2 = Mild. One or two dramatic words, overall restrained.
-3 = Moderate. Regular emotional language to increase engagement.
-4 = Strong. Consistently prioritizes drama over accuracy.
-5 = Extreme. Tabloid-level. Facts secondary to emotional impact.
+1 = No sensationalism. Measured, precise, factual tone throughout.
+2 = Mild. One or two dramatic words; overall tone is restrained and informative.
+3 = Moderate. Emotional language appears regularly and is not incidental to the reporting.
+4 = Strong. Drama consistently prioritised over precision; the tone shapes how facts are received.
+5 = Extreme. Tabloid-level. Emotional impact is the primary goal; factual precision is secondary.
 
-Return ONLY this JSON:
+WORKED EXAMPLE -- score 4:
+Headline: "BOMBSHELL: Explosive new report DEVASTATES president in shocking corruption scandal"
+Body uses: "explosive revelations", "damning evidence", "shocking allegations", "sources say it could bring down the administration".
+None of these add factual content. The score is 4 because the pattern is consistent throughout, not just in the headline.
+Evidence phrase: "explosive revelations", neutral_alternative: "new findings".
+
+PHRASE INSTRUCTION: Return the single most egregious sensationalist phrase -- the word or short phrase that most clearly prioritises drama over factual content.
+
+Return ONLY valid JSON with no markdown:
 {{
   "score": <integer 1-5>,
   "confidence": <integer 1-100>,
-  "reasoning": "<max 25 words>",
+  "reasoning": "<max 45 words: describe the pattern of sensationalist language, noting whether it is incidental or systematic>",
   "evidence": [
     {{
-      "phrase": "<exact phrase from article>",
-      "explanation": "<why it is sensationalist>",
-      "neutral_alternative": "<factual version>"
+      "phrase": "<the most sensationalist word or short phrase>",
+      "explanation": "<why this specific word or phrase prioritises drama over factual precision>",
+      "neutral_alternative": "<the factual, undramatic equivalent>"
     }}
   ]
 }}
@@ -393,36 +463,42 @@ Article Text: {text}"""
 
     "false_balance": {
         "name": "False Balance",
-        "prompt": """You are an expert media bias analyst. Your only task is to analyze FALSE BALANCE.
+        "prompt": """You are an expert media bias analyst. Your ONLY task is to detect FALSE BALANCE.
 
-False balance occurs when an article treats two positions as equally credible or
-equally supported by evidence when they are not — giving fringe or minority views
-the same weight as mainstream or well-evidenced positions.
+DEFINITION: False balance occurs when an article presents two positions as equally credible or equally supported by evidence when they are not -- giving fringe, minority, or discredited views the same weight as mainstream, well-evidenced, or consensus positions.
 
-EXAMPLES:
-- Presenting a climate scientist and a climate denier as equally credible
-- Giving equal space to a medical consensus and a discredited study
-- Framing a 97%-3% scientific split as "scientists disagree"
-- Inviting one expert and one conspiracy theorist as if they represent equal sides
-- Using "both sides" framing when evidence strongly favors one position
+DO NOT flag: cases where genuine disagreement exists between credible experts. Only flag cases where the article treats positions as equivalent when the evidence strongly favours one.
+
+SIGNAL EXAMPLES:
+- Presenting a climate scientist and a climate-change denier as equally credible
+- "Scientists disagree" when 97% of relevant experts hold one position
+- Giving a discredited study the same paragraph space as a meta-analysis of 50 studies
+- Interviewing one credentialled expert and one conspiracy theorist as "both sides"
+- "Some say X, others say Y" framing when X is the consensus and Y is a fringe position
 
 SCORING GUIDE:
-1 = No false balance. Weight given reflects actual evidence and expert consensus.
-2 = Mild. Slight over-representation of minority view but not misleading.
-3 = Moderate. Minority position clearly elevated beyond its evidential standing.
-4 = Strong. Fringe view presented as equivalent to mainstream consensus.
-5 = Extreme. Fringe view given more weight than the consensus position.
+1 = Proportionate. Weight given to each position reflects actual evidence and expert consensus.
+2 = Mild. Slight over-representation of minority view but not misleading to a careful reader.
+3 = Moderate. Minority position elevated beyond its evidential standing in a way that could mislead.
+4 = Strong. Fringe view presented as equivalent to mainstream consensus throughout.
+5 = Extreme. Fringe view given more space or credibility than the consensus position.
 
-Return ONLY this JSON:
+WORKED EXAMPLE -- score 4:
+Climate article: two paragraphs quoting an IPCC scientist on warming evidence, two paragraphs quoting a fossil fuel industry spokesperson questioning the models. The juxtaposition implies equivalent credibility. The article does not note that 97% of climate scientists share the first position.
+Evidence phrase: "others question whether the models can be trusted", neutral_alternative: "a small number of researchers, some with fossil fuel industry funding, dispute the modelling assumptions".
+
+PHRASE INSTRUCTION: Return the phrase that creates the false equivalence -- usually the "on the other hand" or "others say" construction that elevates the minority position.
+
+Return ONLY valid JSON with no markdown:
 {{
   "score": <integer 1-5>,
   "confidence": <integer 1-100>,
-  "reasoning": "<max 25 words>",
+  "reasoning": "<max 45 words: identify the two positions and explain why treating them as equivalent is misleading>",
   "evidence": [
     {{
-      "phrase": "<exact phrase from article>",
-      "explanation": "<why it reflects false balance>",
-      "neutral_alternative": "<proportional version>"
+      "phrase": "<the phrase that creates the false equivalence>",
+      "explanation": "<why presenting these positions as equivalent misrepresents the actual evidence>",
+      "neutral_alternative": "<proportionate framing that reflects the actual balance of evidence>"
     }}
   ]
 }}
@@ -433,41 +509,42 @@ Article Text: {text}"""
 
     "omission": {
         "name": "Omission Bias",
-        "prompt": """You are an expert media bias analyst. Your only task is to analyze OMISSION BIAS.
+        "prompt": """You are an expert media bias analyst. Your ONLY task is to detect OMISSION BIAS.
 
-Omission bias occurs when an article leaves out information that would materially
-change the reader's understanding — not through false statements but through
-selective incompleteness.
+DEFINITION: Omission bias occurs when an article leaves out information that a well-informed reader would consider material -- information whose absence systematically favours one interpretation and whose presence would change how the article reads.
 
-EXAMPLES:
-- Reporting a crime statistic without the base rate that would contextualise it
-- Covering a protest's violence without mentioning what triggered the protest
-- Reporting a politician's statement without mentioning their contradictory
-  statement from the previous week
-- Describing a policy's costs without mentioning its benefits, or vice versa
-- Omitting the outcome of a story that would undermine the article's framing
+DO NOT flag: information that is merely interesting but non-material, or omissions that are clearly explained by space constraints. Only flag cases where the missing information is directly relevant to the article's central claim and its absence appears to serve a narrative purpose.
 
-Note: Omission bias is harder to detect than commission bias. Score conservatively —
-only flag cases where the missing information is clearly relevant and its absence
-appears deliberate rather than due to space constraints.
+SIGNAL EXAMPLES:
+- Reporting a statistic without the baseline that contextualises it ("crime rose 40%" without noting the prior year was historically low)
+- Covering a protest's violence without mentioning the event that triggered the protest
+- Reporting a politician's new statement without noting their directly contradictory statement from last month
+- Describing a policy's costs without any mention of its intended or actual benefits
+- Reporting an accusation without noting that the accused denied it or that no charges were filed
 
 SCORING GUIDE:
-1 = Complete. All material context present or absence is clearly space-related.
-2 = Mild. One minor omission but the article is broadly representative.
-3 = Moderate. A relevant piece of context is missing that would change interpretation.
-4 = Strong. Several key omissions that systematically favor one interpretation.
-5 = Extreme. The article is misleading specifically through what it leaves out.
+1 = Complete. All material context present; any gaps are clearly space-related.
+2 = Mild. One minor omission; the article is broadly representative without it.
+3 = Moderate. A relevant piece of context is absent that would meaningfully change how the central claim reads.
+4 = Strong. Multiple key omissions that together systematically favour one interpretation.
+5 = Extreme. The article is actively misleading through what it leaves out.
 
-Return ONLY this JSON:
+WORKED EXAMPLE -- score 3:
+Article reports "violent crime in the city rose 35% last year." It does not mention that the prior year had the lowest violent crime rate in 30 years, making a 35% increase return rates to near the historical average. The omitted baseline changes the story entirely.
+Evidence phrase: "violent crime in the city rose 35% last year", neutral_alternative: "violent crime rose 35% last year, returning rates close to the historical average after a record low in the prior year".
+
+PHRASE INSTRUCTION: Return the specific claim in the article where the material context is missing -- the sentence that would read differently if the omitted information were included.
+
+Return ONLY valid JSON with no markdown:
 {{
   "score": <integer 1-5>,
   "confidence": <integer 1-100>,
-  "reasoning": "<max 25 words>",
+  "reasoning": "<max 45 words: state what is omitted, why it is material, and how its absence shapes the interpretation>",
   "evidence": [
     {{
-      "phrase": "<exact phrase or claim from article where context is missing>",
-      "explanation": "<what is omitted and why it matters>",
-      "neutral_alternative": "<how to write it with full context>"
+      "phrase": "<the claim where material context is missing>",
+      "explanation": "<what specific information is omitted and why it matters>",
+      "neutral_alternative": "<the same claim written with the omitted context included>"
     }}
   ]
 }}
@@ -478,40 +555,42 @@ Article Text: {text}"""
 
     "ingroup_outgroup": {
         "name": "In-group/Out-group Bias",
-        "prompt": """You are an expert media bias analyst. Your only task is to analyze IN-GROUP/OUT-GROUP BIAS.
+        "prompt": """You are an expert media bias analyst. Your ONLY task is to detect IN-GROUP/OUT-GROUP BIAS.
 
-In-group/out-group bias occurs when an article uses language that treats some
-groups as normal, relatable, or deserving of empathy, while treating other groups
-as foreign, threatening, or less deserving of sympathy.
+DEFINITION: In-group/out-group bias occurs when an article uses systematically different language to describe comparable groups -- humanising one group and othering, dehumanising, or threatening-ifying another. It operates through asymmetric language choices applied to comparable people or situations.
 
-EXAMPLES:
-- Humanizing language for one group ("families", "workers", "community") and
-  dehumanizing language for another ("illegals", "hordes", "mob")
-- Describing in-group violence as isolated incidents and out-group violence as
-  representative of the whole group
-- Using first names or personal details for in-group individuals and
-  demographic labels for out-group individuals
-- "Us" vs "them" framing in reporting
-- Describing out-group members' motives as sinister and in-group members' as
-  understandable
+DO NOT flag: general political framing (framing bias) or asymmetric causal explanations (attribution bias). Focus specifically on language that treats comparable groups with different levels of humanity, complexity, or sympathy.
+
+SIGNAL EXAMPLES:
+- Humanising language for one group ("families", "workers", "communities", first names) vs dehumanising language for another ("illegals", "hordes", "swarms", demographic labels only)
+- In-group violence described as isolated incidents; out-group violence described as characteristic of the whole group
+- In-group individuals given personal backstory and motivations; out-group individuals described only by demographics or affiliation
+- "Our" community, "our" values, "our" country -- pronoun choices that implicitly exclude
+- Describing out-group members' actions as threats and in-group members' identical actions as legitimate
 
 SCORING GUIDE:
-1 = Consistent. All groups described with equivalent humanity and complexity.
-2 = Mild. Slight difference in language but not dehumanizing.
-3 = Moderate. Clear pattern of warmer language for one group.
-4 = Strong. Systematic humanization of one group and othering of another.
-5 = Extreme. Dehumanizing language used for out-group throughout.
+1 = Consistent. All groups described with equivalent humanity, complexity, and neutrality.
+2 = Mild. Slight language difference but not dehumanising; may be incidental.
+3 = Moderate. Clear pattern of warmer, more humanising language for one group across the article.
+4 = Strong. Systematic humanisation of one group and othering of another throughout.
+5 = Extreme. Dehumanising or threatening language used consistently for the out-group.
 
-Return ONLY this JSON:
+WORKED EXAMPLE -- score 4:
+Article about a border crossing: US Border Patrol agents are described individually by name, quoted discussing their families, and described as "protecting their communities". Migrants are referred to collectively as "the group", "the individuals", and "the illegal crossers" with no names, no personal details, and no direct quotes.
+Evidence phrase: "the illegal crossers", neutral_alternative: "the migrants" or "the people crossing the border".
+
+PHRASE INSTRUCTION: Return the phrase that most clearly demonstrates the asymmetric treatment -- ideally one that contrasts directly with how the comparable group is described elsewhere in the article.
+
+Return ONLY valid JSON with no markdown:
 {{
   "score": <integer 1-5>,
   "confidence": <integer 1-100>,
-  "reasoning": "<max 25 words>",
+  "reasoning": "<max 45 words: identify the two groups and describe the specific language asymmetry>",
   "evidence": [
     {{
-      "phrase": "<exact phrase from article>",
-      "explanation": "<why it reflects in-group/out-group bias>",
-      "neutral_alternative": "<consistent version>"
+      "phrase": "<phrase showing dehumanising or othering language>",
+      "explanation": "<what language asymmetry this reflects and which group is treated differently>",
+      "neutral_alternative": "<consistent version using equivalent language for both groups>"
     }}
   ]
 }}
@@ -522,27 +601,26 @@ Article Text: {text}"""
 
     "strengths": {
         "name": "Writing Strengths",
-        "prompt": """You are an expert media bias analyst. Your only task is to identify
-NEUTRAL, WELL-WRITTEN, or BALANCED phrases in this article.
+        "prompt": """You are an expert media bias analyst. Your ONLY task is to identify NEUTRAL, WELL-WRITTEN, or BALANCED phrases in this article.
 
-You are NOT looking for bias. Find phrases that demonstrate good journalistic
-practice — neutral language, balanced framing, or factual precision.
+You are looking for phrases that demonstrate good journalistic practice -- neutral language, balanced framing, factual precision, transparent sourcing, or appropriate acknowledgment of uncertainty.
 
-EXAMPLES:
+SIGNAL EXAMPLES:
 - "The government announced a new policy" (factual, no editorial judgment)
 - "Both parties expressed concern about the legislation" (balanced)
 - "According to official figures released Tuesday" (precise sourcing)
-- "Analysts disagree on the long-term impact" (acknowledges uncertainty)
+- "Analysts disagree on the long-term impact" (honest uncertainty)
 - "The statement could not be independently verified" (transparency)
+- "The report, which has not been peer-reviewed, suggests..." (appropriate qualification)
 
-Return ONLY this JSON:
+Return 2 to 5 phrases. Only include genuinely good examples -- phrases that a journalism ethics textbook would cite as model practice. Do not include phrases that are merely neutral by default.
+
+Return ONLY valid JSON with no markdown:
 {{
   "strengths": [
     "<exact phrase from article demonstrating neutral or balanced writing>"
   ]
 }}
-
-Return 2 to 5 phrases. Only include genuinely good examples.
 
 Article Title: {title}
 Article Text: {text}"""
@@ -567,7 +645,7 @@ def run_single_prompt(bias_key: str, title: str, text: str, model: str = "gemini
 
         response = claude_client.messages.create(
             model="claude-sonnet-4-6",
-            max_tokens=1024,
+            max_tokens=2048,
             temperature=0.0,
             messages=[{"role": "user", "content": prompt}]
         )
@@ -581,16 +659,37 @@ def run_single_prompt(bias_key: str, title: str, text: str, model: str = "gemini
             config={
                 "temperature": 0.0,
                 "top_p": 1.0,
-                "response_mime_type": "application/json"
+                "max_output_tokens": 8192,
             }
         )
         raw = response.text.strip()
+        print(f"[Gemini raw response for {bias_key}]: {raw[:300]}")
+
+    # Strip markdown code fences if Gemini wrapped the JSON
+    if raw.startswith("```"):
+        raw = raw.split("```")[1]
+        if raw.startswith("json"):
+            raw = raw[4:]
+        raw = raw.strip()
 
     try:
         result = json.loads(raw)
     except Exception:
         start = raw.find('{')
         end = raw.rfind('}') + 1
+        if start == -1 or end == 0:
+            # Truncated response — return safe fallback instead of crashing
+            print(f"Truncated/unparseable response for {bias_key}: {raw[:100]}")
+            return {
+                "score": None,
+                "confidence": 0,
+                "reasoning": "Response was truncated. Try again.",
+                "evidence": [],
+                "bias_type": PROMPTS[bias_key]["name"],
+                "bias_key": bias_key,
+                "model_used": "Claude" if model == "claude" else "Gemini",
+                "error": "truncated"
+            }
         result = json.loads(raw[start:end])
 
     result["bias_type"] = PROMPTS[bias_key]["name"]
@@ -620,7 +719,7 @@ def build_highlighted_text(text: str, evidence: list) -> str:
 def direction_score_to_category(direction_score: int) -> str:
     """
     Maps a -100 to +100 direction score to a BiasCategory label.
-    Thresholds are intentionally wide — most articles are not extreme.
+    Thresholds are intentionally wide -- most articles are not extreme.
     """
     if direction_score <= -70:
         return "Far Left"
@@ -646,12 +745,12 @@ def health_check():
 @app.route('/api/analyze', methods=['POST'])
 def analyze_text():
     """
-    Main analysis endpoint. Runs prompts sequentially — one per bias type.
+    Main analysis endpoint. Runs prompts sequentially -- one per bias type.
 
     Now runs by default:
-      1. political_framing  — intensity score 1-5
-      2. political_direction — left/right score -100 to +100 (fixes the slider)
-      3. sensationalism     — intensity score 1-5
+      1. political_framing  -- intensity score 1-5
+      2. political_direction -- left/right score -100 to +100 (fixes the slider)
+      3. sensationalism     -- intensity score 1-5
 
     Request body:
     {
