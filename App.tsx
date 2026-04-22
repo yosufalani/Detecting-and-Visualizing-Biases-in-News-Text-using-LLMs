@@ -2,14 +2,14 @@ import React, { useState, useEffect } from 'react';
 import { AnalysisResult } from './types';
 import { fetchHistory, deleteAnalysis, checkBackendConnection } from './services/apiService';
 import ArticleAnalyzer from './components/ArticleAnalyzer';
-import CompareView from './components/CompareView';
 import HistoryList from './components/HistoryList';
 import ResultView from './components/ResultView';
+import StatsView from './components/StatsView';
 
 const App: React.FC = () => {
   const [history, setHistory]               = useState<AnalysisResult[]>([]);
   const [selectedResult, setSelectedResult] = useState<AnalysisResult | null>(null);
-  const [view, setView]                     = useState<'home' | 'compare'>('home');
+  const [view, setView]                     = useState<'home' | 'stats'>('home');
   const [isBackendOnline, setIsBackendOnline] = useState(false);
 
   useEffect(() => {
@@ -96,8 +96,8 @@ const App: React.FC = () => {
           {/* Nav */}
           <nav className="flex items-center gap-1 pb-1">
             {([
-              { key: 'home',    label: 'Analyse' },
-              { key: 'compare', label: 'Compare' },
+              { key: 'home',  label: 'Analyse' },
+              { key: 'stats', label: 'Results' },
             ] as const).map(({ key, label }) => (
               <button
                 key={key}
@@ -187,8 +187,9 @@ const App: React.FC = () => {
           </div>
         )}
 
-        {view === 'compare' && (
-          <CompareView history={history} />
+
+        {view === 'stats' && (
+          <StatsView />
         )}
 
       </main>

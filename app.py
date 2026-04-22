@@ -64,10 +64,11 @@ def init_db():
                   framingScore REAL,
                   confidence REAL,
                   fullText TEXT,
-                  source TEXT)''')
+                  source TEXT,
+                  modelUsed TEXT)''')
 
     # Migrate existing DBs that don't have the new columns yet
-    for col, coltype in [("fullText", "TEXT"), ("source", "TEXT")]:
+    for col, coltype in [("fullText", "TEXT"), ("source", "TEXT"), ("modelUsed", "TEXT")]:
         try:
             c.execute(f"ALTER TABLE analysis ADD COLUMN {col} {coltype}")
         except Exception:
@@ -892,7 +893,7 @@ def save_analysis():
         c = conn.cursor()
 
         c.execute('''INSERT OR REPLACE INTO analysis VALUES
-                     (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
+                     (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
                   (
                       data['id'],
                       data['timestamp'],
@@ -910,6 +911,7 @@ def save_analysis():
                       data.get('confidence', 0),
                       data.get('fullText', ''),
                       data.get('source', ''),
+                      data.get('modelUsed', ''),
                   ))
 
         conn.commit()
@@ -935,7 +937,7 @@ def get_history():
             'id', 'timestamp', 'title', 'summary', 'biasScore', 'category',
             'sensationalismScore', 'tonality', 'biasedPhrases',
             'originalTextSnippet', 'detailedBiases', 'highlightedText',
-            'framingScore', 'confidence', 'fullText', 'source'
+            'framingScore', 'confidence', 'fullText', 'source', 'modelUsed'
         ]
 
         results = []
@@ -969,75 +971,191 @@ def delete_analysis(id):
 @app.route('/api/evaluate', methods=['GET'])
 def evaluate_ground_truth():
     """
-    Run all ground truth articles through the political framing prompt
-    and return a human vs AI comparison. Used for thesis evaluation (Chapter 4).
+    Runs all annotated ground truth articles through BOTH Gemini and Claude
+    on the framing prompt. Returns JSON summary + per-article results.
+    Use /api/evaluate/csv to download the full results as a CSV file.
     """
-    try:
-        from ground_truth import GROUND_TRUTH
-    except ImportError:
-        return jsonify({
-            "error": "ground_truth.py not found. Create it with your annotated articles."
-        }), 404
-
     try:
         from ground_truth import GROUND_TRUTH, get_consensus_score
     except ImportError:
-        return jsonify({
-            "error": "ground_truth.py not found. Create it with your annotated articles."
-        }), 404
+        return jsonify({"error": "ground_truth.py not found."}), 404
 
     results = []
     for article in GROUND_TRUTH:
-        # Skip articles with no text or no human score yet
         if not article.get("text", "").strip():
             continue
         human_score = get_consensus_score(article)
         if human_score is None:
             continue
 
+        row = {
+            "id":           article["id"],
+            "title":        article["title"],
+            "source":       article.get("source", ""),
+            "topic":        article.get("topic", ""),
+            "human_score":  human_score,
+            "annotator_1":  article["human_scores"]["political_framing"].get("annotator_1"),
+            "annotator_2":  article["human_scores"]["political_framing"].get("annotator_2"),
+            "human_notes":  article["human_scores"]["political_framing"].get("notes", ""),
+        }
+
+        # Run Gemini
         try:
-            ai = run_single_prompt("framing", article["title"], article["text"])
-            ai_score = ai.get("score") or 0
-            diff = abs(human_score - ai_score)
-
-            results.append({
-                "id":            article["id"],
-                "title":         article["title"],
-                "source":        article.get("source", ""),
-                "topic":         article.get("topic", ""),
-                "human_score":   human_score,
-                "ai_score":      ai_score,
-                "difference":    diff,
-                "exact_match":   diff == 0,
-                "within_1":      diff <= 1,
-                "ai_confidence": ai.get("confidence", 0),
-                "ai_reasoning":  ai.get("reasoning", ""),
-                "human_notes":   article["human_scores"]["political_framing"].get("notes", ""),
-            })
-
-            time.sleep(0.5)
-
+            g = run_single_prompt("framing", article["title"], article["text"], model="gemini")
+            row["gemini_score"]      = g.get("score") or 0
+            row["gemini_confidence"] = g.get("confidence", 0)
+            row["gemini_reasoning"]  = g.get("reasoning", "")
+            row["gemini_diff"]       = abs(human_score - row["gemini_score"])
+            row["gemini_exact"]      = row["gemini_diff"] == 0
+            row["gemini_within_1"]   = row["gemini_diff"] <= 1
+            time.sleep(1)
         except Exception as e:
-            print(f"Eval error on {article.get('id')}: {e}")
-            results.append({
-                "id":    article.get("id"),
-                "title": article.get("title"),
-                "error": str(e)
-            })
+            row["gemini_score"] = None
+            row["gemini_error"] = str(e)
 
-    valid = [r for r in results if "error" not in r]
+        # Run Claude
+        try:
+            c = run_single_prompt("framing", article["title"], article["text"], model="claude")
+            row["claude_score"]      = c.get("score") or 0
+            row["claude_confidence"] = c.get("confidence", 0)
+            row["claude_reasoning"]  = c.get("reasoning", "")
+            row["claude_diff"]       = abs(human_score - row["claude_score"])
+            row["claude_exact"]      = row["claude_diff"] == 0
+            row["claude_within_1"]   = row["claude_diff"] <= 1
+            time.sleep(1)
+        except Exception as e:
+            row["claude_score"] = None
+            row["claude_error"] = str(e)
+
+        # Model agreement
+        if row.get("gemini_score") is not None and row.get("claude_score") is not None:
+            row["model_agreement_diff"] = abs(row["gemini_score"] - row["claude_score"])
+            row["models_agree"]         = row["model_agreement_diff"] <= 1
+        else:
+            row["model_agreement_diff"] = None
+            row["models_agree"]         = None
+
+        results.append(row)
+        print(f"Evaluated: {article['id']} | Human: {human_score} | Gemini: {row.get('gemini_score')} | Claude: {row.get('claude_score')}")
+
+    valid = [r for r in results if r.get("gemini_score") is not None or r.get("claude_score") is not None]
     if not valid:
         return jsonify({"error": "All evaluations failed", "details": results}), 500
 
+    def safe_metric(key_exact, key_within, key_diff, key_conf, rows):
+        scored = [r for r in rows if r.get(key_exact) is not None]
+        if not scored:
+            return {}
+        return {
+            "n":               len(scored),
+            "exact_match_rate": round(sum(r[key_exact]  for r in scored) / len(scored), 3),
+            "within_1_rate":    round(sum(r[key_within] for r in scored) / len(scored), 3),
+            "avg_difference":   round(sum(r[key_diff]   for r in scored) / len(scored), 2),
+            "avg_confidence":   round(sum(r[key_conf]   for r in scored) / len(scored), 1),
+        }
+
+    # Inter-annotator agreement (Cohen's Kappa approximation)
+    paired = [r for r in results
+              if r.get("annotator_1") is not None and r.get("annotator_2") is not None]
+    kappa = None
+    if len(paired) >= 2:
+        a1 = [r["annotator_1"] for r in paired]
+        a2 = [r["annotator_2"] for r in paired]
+        agree = sum(x == y for x, y in zip(a1, a2)) / len(paired)
+        # Simple observed agreement (full kappa requires scipy)
+        kappa = round(agree, 3)
+
     summary = {
-        "total_articles":    len(valid),
-        "exact_match_rate":  round(sum(r["exact_match"] for r in valid) / len(valid), 3),
-        "within_1_rate":     round(sum(r["within_1"]    for r in valid) / len(valid), 3),
-        "avg_difference":    round(sum(r["difference"]   for r in valid) / len(valid), 2),
-        "avg_ai_confidence": round(sum(r["ai_confidence"] for r in valid) / len(valid), 1),
+        "total_articles":      len(results),
+        "evaluated_articles":  len(valid),
+        "gemini":  safe_metric("gemini_exact", "gemini_within_1", "gemini_diff", "gemini_confidence", valid),
+        "claude":  safe_metric("claude_exact", "claude_within_1", "claude_diff", "claude_confidence", valid),
+        "inter_annotator_agreement": kappa,
+        "model_agreement_rate": round(
+            sum(1 for r in valid if r.get("models_agree")) / len(valid), 3
+        ) if valid else None,
     }
 
     return jsonify({"summary": summary, "results": results})
+
+
+@app.route('/api/evaluate/csv', methods=['GET'])
+def evaluate_csv():
+    """
+    Same as /api/evaluate but returns a downloadable CSV file.
+    Open in Excel for thesis tables.
+    """
+    import io
+    import csv as csv_module
+    from flask import Response
+
+    # Re-use the evaluate logic
+    eval_response = evaluate_ground_truth()
+    if isinstance(eval_response, tuple):
+        return eval_response
+    data = eval_response.get_json()
+
+    if "error" in data:
+        return jsonify(data), 500
+
+    results  = data["results"]
+    summary  = data["summary"]
+
+    output = io.StringIO()
+    writer = csv_module.writer(output)
+
+    # --- Sheet 1: Per-article results ---
+    writer.writerow([
+        "ID", "Title", "Source", "Topic",
+        "Human Score", "Annotator 1", "Annotator 2", "Human Notes",
+        "Gemini Score", "Gemini Diff", "Gemini Exact Match", "Gemini Within 1", "Gemini Confidence", "Gemini Reasoning",
+        "Claude Score", "Claude Diff", "Claude Exact Match", "Claude Within 1", "Claude Confidence", "Claude Reasoning",
+        "Model Agreement Diff", "Models Agree"
+    ])
+
+    for r in results:
+        writer.writerow([
+            r.get("id", ""),
+            r.get("title", ""),
+            r.get("source", ""),
+            r.get("topic", ""),
+            r.get("human_score", ""),
+            r.get("annotator_1", ""),
+            r.get("annotator_2", ""),
+            r.get("human_notes", ""),
+            r.get("gemini_score", ""),
+            r.get("gemini_diff", ""),
+            r.get("gemini_exact", ""),
+            r.get("gemini_within_1", ""),
+            r.get("gemini_confidence", ""),
+            r.get("gemini_reasoning", ""),
+            r.get("claude_score", ""),
+            r.get("claude_diff", ""),
+            r.get("claude_exact", ""),
+            r.get("claude_within_1", ""),
+            r.get("claude_confidence", ""),
+            r.get("claude_reasoning", ""),
+            r.get("model_agreement_diff", ""),
+            r.get("models_agree", ""),
+        ])
+
+    # --- Blank row then summary ---
+    writer.writerow([])
+    writer.writerow(["SUMMARY METRICS"])
+    writer.writerow(["Metric", "Gemini", "Claude"])
+    g = summary.get("gemini", {})
+    c = summary.get("claude", {})
+    for metric in ["n", "exact_match_rate", "within_1_rate", "avg_difference", "avg_confidence"]:
+        writer.writerow([metric, g.get(metric, ""), c.get(metric, "")])
+    writer.writerow(["inter_annotator_agreement", summary.get("inter_annotator_agreement", ""), ""])
+    writer.writerow(["model_agreement_rate", summary.get("model_agreement_rate", ""), ""])
+
+    output.seek(0)
+    return Response(
+        output.getvalue(),
+        mimetype="text/csv",
+        headers={"Content-Disposition": "attachment; filename=veribias_evaluation.csv"}
+    )
 
 
 # -------------------------
@@ -1052,6 +1170,80 @@ def serve_index():
 @app.route('/<path:path>')
 def serve_static(path):
     return send_from_directory('.', path)
+
+
+
+@app.route('/api/stats', methods=['GET'])
+def get_stats():
+    """
+    Returns aggregated statistics across all saved analyses for the dashboard.
+    """
+    try:
+        conn = sqlite3.connect(DB_NAME)
+        c = conn.cursor()
+        c.execute('SELECT biasScore, category, framingScore, sensationalismScore, confidence, source, detailedBiases FROM analysis ORDER BY timestamp DESC')
+        rows = c.fetchall()
+        conn.close()
+
+        if not rows:
+            return jsonify({"total": 0})
+
+        total = len(rows)
+
+        # Category distribution
+        category_counts = {}
+        for row in rows:
+            cat = row[1] or "Unknown"
+            category_counts[cat] = category_counts.get(cat, 0) + 1
+
+        # Outlet distribution
+        outlet_counts = {}
+        for row in rows:
+            src = row[5] or "Unknown"
+            outlet_counts[src] = outlet_counts.get(src, 0) + 1
+
+        # Average scores
+        framing_scores  = [row[2] for row in rows if row[2] is not None]
+        sens_scores     = [row[3] for row in rows if row[3] is not None]
+        conf_scores     = [row[4] for row in rows if row[4] is not None]
+        bias_scores     = [row[0] for row in rows if row[0] is not None]
+
+        avg_framing       = round(sum(framing_scores)  / len(framing_scores),  2) if framing_scores  else 0
+        avg_sensationalism= round(sum(sens_scores)     / len(sens_scores),     2) if sens_scores     else 0
+        avg_confidence    = round(sum(conf_scores)     / len(conf_scores),     1) if conf_scores     else 0
+        avg_direction     = round(sum(bias_scores)     / len(bias_scores),     1) if bias_scores     else 0
+
+        # Bias type frequency across all articles
+        bias_type_counts = {}
+        for row in rows:
+            try:
+                biases = json.loads(row[6] or "[]")
+                for b in biases:
+                    key = b.get("type", b.get("key", ""))
+                    if key:
+                        bias_type_counts[key] = bias_type_counts.get(key, 0) + 1
+            except Exception:
+                pass
+
+        # High bias articles (framing >= 4)
+        high_bias = sum(1 for s in framing_scores if s >= 4)
+
+        return jsonify({
+            "total":              total,
+            "avg_framing":        avg_framing,
+            "avg_sensationalism": avg_sensationalism,
+            "avg_confidence":     avg_confidence,
+            "avg_direction":      avg_direction,
+            "high_bias_count":    high_bias,
+            "high_bias_pct":      round(high_bias / total * 100, 1) if total else 0,
+            "category_counts":    category_counts,
+            "outlet_counts":      outlet_counts,
+            "bias_type_counts":   bias_type_counts,
+        })
+
+    except Exception as e:
+        print("STATS ERROR:", e)
+        return jsonify({"error": str(e)}), 500
 
 
 # -------------------------

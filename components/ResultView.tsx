@@ -41,9 +41,10 @@ interface ResultViewProps {
 }
 
 const ResultView: React.FC<ResultViewProps> = ({ result, onClose }) => {
-  const [expanded,        setExpanded]        = useState<string | null>(null);
-  const [tooltip,         setTooltip]         = useState<Tooltip | null>(null);
-  const [showHighlighted, setShowHighlighted] = useState(false);
+  const [expanded,          setExpanded]          = useState<string | null>(null);
+  const [tooltip,           setTooltip]           = useState<Tooltip | null>(null);
+  const [showHighlighted,   setShowHighlighted]   = useState(false);
+  const [showVisualizations, setShowVisualizations] = useState(false);
   const articleRef                            = useRef<HTMLDivElement>(null);
   const tooltipRef                            = useRef<HTMLDivElement>(null);
 
@@ -138,8 +139,16 @@ const ResultView: React.FC<ResultViewProps> = ({ result, onClose }) => {
           <p style={serif} className="text-[12px] text-[#888] italic mt-1">
             {(result as any).source && `${(result as any).source} · `}
             {new Date(result.timestamp).toLocaleString('en-GB')}
-            {(result as any).modelUsed && ` · ${(result as any).modelUsed}`}
           </p>
+          {(result as any).modelUsed && (
+            <span style={serif} className={`inline-block mt-1.5 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${
+              (result as any).modelUsed === 'Claude'
+                ? 'bg-[#f0f4ff] text-[#2E5FA3] border border-[#2E5FA3]'
+                : 'bg-[#fff8f0] text-[#d97706] border border-[#d97706]'
+            }`}>
+              {(result as any).modelUsed}
+            </span>
+          )}
         </div>
         <button onClick={onClose} className="text-[#aaa] hover:text-[#1a1a1a] transition-colors text-sm shrink-0">✕</button>
       </div>
@@ -175,7 +184,115 @@ const ResultView: React.FC<ResultViewProps> = ({ result, onClose }) => {
         </div>
       </div>
 
-      {/* ── Political alignment ─────────────────────────────────── */}
+      {/* ── Visualizations toggle ───────────────────────────────── */}
+      {(confidence > 0 || detectedBiases.length > 0) && (
+        <div className="mb-6">
+          <button
+            onClick={() => setShowVisualizations(v => !v)}
+            style={serif}
+            className="text-[12px] text-[#888] italic hover:text-[#1a1a1a] transition-colors underline underline-offset-2"
+          >
+            {showVisualizations ? 'Hide visualizations' : 'Show visualizations'}
+          </button>
+
+          {showVisualizations && (
+            <div className="mt-4 space-y-4">
+
+              {/* ── Confidence gauge ──────────────────────────────── */}
+              {confidence > 0 && (
+                <div className="border border-[#e8e4de] bg-white p-4">
+                  <p style={serif} className="text-[10px] font-bold uppercase tracking-[0.15em] text-[#888] mb-3">
+                    Model Confidence
+                  </p>
+                  <div className="flex items-center gap-4">
+                    <svg width="96" height="56" viewBox="0 0 96 56" className="shrink-0">
+                      <path d="M 8 52 A 40 40 0 0 1 88 52" fill="none" stroke="#eee" strokeWidth="8" strokeLinecap="round" />
+                      {(() => {
+                        const r = 40;
+                        const total = Math.PI * r;
+                        const filled = (confidence / 100) * total;
+                        const color = confidence >= 80 ? '#16a34a' : confidence >= 60 ? '#d97706' : '#dc2626';
+                        return (
+                          <path
+                            d="M 8 52 A 40 40 0 0 1 88 52"
+                            fill="none" stroke={color} strokeWidth="8" strokeLinecap="round"
+                            strokeDasharray={`${filled} ${total}`}
+                            style={{ transition: 'stroke-dasharray 0.8s ease' }}
+                          />
+                        );
+                      })()}
+                      <text x="48" y="50" textAnchor="middle" fontFamily="Georgia, serif" fontSize="15" fontWeight="bold"
+                        fill={confidence >= 80 ? '#16a34a' : confidence >= 60 ? '#d97706' : '#dc2626'}>
+                        {confidence}%
+                      </text>
+                    </svg>
+                    <div className="flex-1 space-y-1.5">
+                      {[
+                        { label: 'High  (≥ 80%)',   color: '#16a34a' },
+                        { label: 'Medium (60–79%)', color: '#d97706' },
+                        { label: 'Low   (< 60%)',   color: '#dc2626' },
+                      ].map(({ label, color }) => (
+                        <div key={label} className="flex items-center gap-2">
+                          <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: color }} />
+                          <span style={serif} className="text-[10px] text-[#999]">{label}</span>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="text-right">
+                      <p style={serif} className="text-[11px] text-[#555] font-semibold">
+                        {confidence >= 80 ? 'High confidence' : confidence >= 60 ? 'Moderate confidence' : 'Low confidence'}
+                      </p>
+                      <p style={serif} className="text-[10px] text-[#aaa] italic mt-0.5">
+                        {confidence >= 80 ? 'Result is reliable' : confidence >= 60 ? 'Treat with some caution' : 'Ambiguous — review manually'}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* ── Bias score bar chart ──────────────────────────── */}
+              {detectedBiases.length > 0 && (
+                <div className="border border-[#e8e4de] bg-white p-4">
+                  <p style={serif} className="text-[10px] font-bold uppercase tracking-[0.15em] text-[#888] mb-4">
+                    Bias Scores — Ranked
+                  </p>
+                  <div className="space-y-2">
+                    {[...detectedBiases]
+                      .sort((a, b) => (b.score || 0) - (a.score || 0))
+                      .map((bias: any) => {
+                        const pct = ((bias.score || 0) / 5) * 100;
+                        const color = severityColor(bias.score);
+                        return (
+                          <div key={bias.key} className="flex items-center gap-3">
+                            <span style={serif} className="text-[11px] text-[#555] w-36 shrink-0 text-right truncate" title={bias.type}>
+                              {bias.type}
+                            </span>
+                            <div className="flex-1 h-4 bg-[#f3f4f6] relative">
+                              <div className="h-full transition-all duration-700" style={{ width: `${pct}%`, backgroundColor: color }} />
+                              {[1,2,3,4].map(t => (
+                                <div key={t} className="absolute top-0 bottom-0 w-px bg-white opacity-60" style={{ left: `${(t/5)*100}%` }} />
+                              ))}
+                            </div>
+                            <div className="w-20 shrink-0 flex items-center gap-1.5">
+                              <span style={{ ...serif, color }} className="text-[12px] font-bold">{bias.score}/5</span>
+                              <span style={{ ...serif, color }} className="text-[10px] italic">{severityLabel(bias.score)}</span>
+                            </div>
+                          </div>
+                        );
+                      })}
+                  </div>
+                  <div className="flex mt-1 pl-[9.5rem] pr-[5rem]">
+                    {['1','2','3','4','5'].map(n => (
+                      <span key={n} style={serif} className="text-[9px] text-[#ccc] flex-1 text-center">{n}</span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+            </div>
+          )}
+        </div>
+      )}
       <div className="mb-6 border border-[#e8e4de] p-4 bg-white">
         <p style={serif} className="text-[10px] font-bold uppercase tracking-[0.15em] text-[#888] mb-3">
           Political Alignment
