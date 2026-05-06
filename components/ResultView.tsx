@@ -14,6 +14,22 @@ const BIAS_META: Record<string, { short: string; desc: string }> = {
   ingroup_outgroup:{ short: 'Us vs them framing between groups', desc: 'In-group/out-group bias frames one group as relatable while presenting another as threatening.' },
 };
 
+const BIAS_COLORS: Record<string, { bg: string; border: string; text: string }> = {
+  framing:          { bg: '#fde8d8', border: '#f97316', text: '#9a3412' },
+  negativity:       { bg: '#fce7f3', border: '#ec4899', text: '#9d174d' },
+  confirmation:     { bg: '#ede9fe', border: '#8b5cf6', text: '#5b21b6' },
+  anchoring:        { bg: '#fef9c3', border: '#eab308', text: '#854d0e' },
+  attribution:      { bg: '#dbeafe', border: '#3b82f6', text: '#1e3a8a' },
+  selection:        { bg: '#d1fae5', border: '#10b981', text: '#064e3b' },
+  sensationalism:   { bg: '#fee2e2', border: '#ef4444', text: '#7f1d1d' },
+  false_balance:    { bg: '#e0f2fe', border: '#0ea5e9', text: '#0c4a6e' },
+  omission:         { bg: '#f3f4f6', border: '#6b7280', text: '#1f2937' },
+  ingroup_outgroup: { bg: '#fdf4ff', border: '#a855f7', text: '#581c87' },
+};
+
+const getBiasColor = (key: string) =>
+  BIAS_COLORS[key] ?? { bg: '#fef9c3', border: '#eab308', text: '#854d0e' };
+
 const severityLabel = (s: number) => s <= 2 ? 'Mild' : s <= 3 ? 'Moderate' : s <= 4 ? 'Strong' : 'Extreme';
 const severityColor = (s: number) => s <= 2 ? '#16a34a' : s <= 3 ? '#d97706' : '#dc2626';
 
@@ -33,6 +49,7 @@ interface Tooltip {
   explanation: string;
   neutral: string;
   biasType: string;
+  biasKey: string;
 }
 
 interface ResultViewProps {
@@ -56,8 +73,8 @@ const ResultView: React.FC<ResultViewProps> = ({ result, onClose }) => {
 
   const serif = { fontFamily: "'Georgia', 'Times New Roman', serif" };
 
-  // Build a lookup: phrase (lowercased) → { explanation, neutral, biasType }
-  const phraseMap = useRef<Map<string, { explanation: string; neutral: string; biasType: string }>>(new Map());
+  // Build a lookup: phrase (lowercased) → { explanation, neutral, biasType, biasKey }
+  const phraseMap = useRef<Map<string, { explanation: string; neutral: string; biasType: string; biasKey: string }>>(new Map());
 
   useEffect(() => {
     phraseMap.current.clear();
@@ -68,6 +85,7 @@ const ResultView: React.FC<ResultViewProps> = ({ result, onClose }) => {
             explanation: e.explanation ?? '',
             neutral:     e.neutral_alternative ?? '',
             biasType:    bias.type ?? '',
+            biasKey:     bias.key ?? '',
           });
         }
       });
@@ -98,6 +116,7 @@ const ResultView: React.FC<ResultViewProps> = ({ result, onClose }) => {
       explanation: lookup?.explanation ?? target.getAttribute('data-explanation') ?? '',
       neutral:     lookup?.neutral     ?? '',
       biasType:    lookup?.biasType    ?? '',
+      biasKey:     lookup?.biasKey     ?? target.getAttribute('data-bias-key') ?? '',
     });
   };
 
@@ -118,13 +137,13 @@ const ResultView: React.FC<ResultViewProps> = ({ result, onClose }) => {
   // Inject data-phrase onto every <mark> after HTML is set
   // (the backend sets data-explanation; we also want data-phrase for the lookup)
   const prepareHtml = (html: string) => {
-    // Replace <mark ...> to add data-phrase equal to the inner text content
-    // We do a simple regex since the backend wraps single phrases
     return html.replace(
       /<mark([^>]*)>([\s\S]*?)<\/mark>/g,
       (_match, attrs, inner) => {
         const text = inner.replace(/<[^>]+>/g, '').trim();
-        return `<mark${attrs} data-phrase="${text.replace(/"/g, '&quot;')}">${inner}</mark>`;
+        const lookup = phraseMap.current.get(text.toLowerCase().trim());
+        const biasKey = lookup?.biasKey ?? '';
+        return `<mark${attrs} data-phrase="${text.replace(/"/g, '&quot;')}" data-bias-key="${biasKey}">${inner}</mark>`;
       }
     );
   };
@@ -261,7 +280,7 @@ const ResultView: React.FC<ResultViewProps> = ({ result, onClose }) => {
                       .sort((a, b) => (b.score || 0) - (a.score || 0))
                       .map((bias: any) => {
                         const pct = ((bias.score || 0) / 5) * 100;
-                        const color = severityColor(bias.score);
+                        const color = getBiasColor(bias.key).border;
                         return (
                           <div key={bias.key} className="flex items-center gap-3">
                             <span style={serif} className="text-[11px] text-[#555] w-36 shrink-0 text-right truncate" title={bias.type}>
@@ -325,6 +344,7 @@ const ResultView: React.FC<ResultViewProps> = ({ result, onClose }) => {
             {[...detectedBiases].sort((a, b) => (b.score || 0) - (a.score || 0)).map((bias: any) => {
               const meta   = BIAS_META[bias.key] ?? { short: '', desc: '' };
               const isOpen = expanded === bias.key;
+              const bc     = getBiasColor(bias.key);
 
               return (
                 <div key={bias.key}>
@@ -332,11 +352,16 @@ const ResultView: React.FC<ResultViewProps> = ({ result, onClose }) => {
                     onClick={() => setExpanded(isOpen ? null : bias.key)}
                     className="w-full text-left px-4 py-3 flex items-center gap-4 hover:bg-[#F8F6F1] transition-colors"
                   >
+                    {/* Colour dot matching highlight colour */}
+                    <div
+                      className="w-3 h-3 rounded-full shrink-0"
+                      style={{ backgroundColor: bc.border }}
+                    />
                     <div className="w-16 shrink-0">
                       <div className="h-1 bg-[#eee]">
                         <div
                           className="h-full transition-all"
-                          style={{ width: `${(bias.score / 5) * 100}%`, backgroundColor: severityColor(bias.score) }}
+                          style={{ width: `${(bias.score / 5) * 100}%`, backgroundColor: bc.border }}
                         />
                       </div>
                     </div>
@@ -346,7 +371,7 @@ const ResultView: React.FC<ResultViewProps> = ({ result, onClose }) => {
                         <p style={serif} className="text-[11px] text-[#999] italic mt-0.5">{meta.short}</p>
                       )}
                     </div>
-                    <span style={serif} className="text-xs italic shrink-0" style={{ color: severityColor(bias.score) }}>
+                    <span style={{ ...serif, color: bc.border }} className="text-xs italic shrink-0">
                       {severityLabel(bias.score)}
                     </span>
                     <i className={`fas fa-chevron-down text-[10px] text-[#bbb] transition-transform ${isOpen ? 'rotate-180' : ''}`} />
@@ -359,12 +384,6 @@ const ResultView: React.FC<ResultViewProps> = ({ result, onClose }) => {
                       )}
                       {meta.desc && (
                         <p style={serif} className="text-[12px] text-[#888]">{meta.desc}</p>
-                      )}
-                      {/* Hint nudging user to the highlighted text */}
-                      {(bias.evidence ?? []).length > 0 && (
-                        <p style={serif} className="text-[11px] text-[#bbb] italic pt-1">
-                          ↓ Click highlighted phrases in the article text to see specific examples
-                        </p>
                       )}
                     </div>
                   )}
@@ -405,7 +424,7 @@ const ResultView: React.FC<ResultViewProps> = ({ result, onClose }) => {
 
           <style>{`
             .highlighted-article mark {
-              background-color: #fef08a;
+              background-color: #fef9c3;
               color: #1a1a1a;
               padding: 0 2px;
               cursor: pointer;
@@ -413,13 +432,18 @@ const ResultView: React.FC<ResultViewProps> = ({ result, onClose }) => {
               border-bottom: 1.5px solid #ca8a04;
               transition: background-color 0.15s;
             }
-            .highlighted-article mark:hover {
-              background-color: #fde047;
-            }
-            .highlighted-article mark.active-mark {
-              background-color: #fde047;
-              outline: 2px solid #ca8a04;
-            }
+            .highlighted-article mark[data-bias-key="framing"]          { background-color: #fde8d8; border-bottom-color: #f97316; }
+            .highlighted-article mark[data-bias-key="negativity"]        { background-color: #fce7f3; border-bottom-color: #ec4899; }
+            .highlighted-article mark[data-bias-key="confirmation"]      { background-color: #ede9fe; border-bottom-color: #8b5cf6; }
+            .highlighted-article mark[data-bias-key="anchoring"]         { background-color: #fef9c3; border-bottom-color: #eab308; }
+            .highlighted-article mark[data-bias-key="attribution"]       { background-color: #dbeafe; border-bottom-color: #3b82f6; }
+            .highlighted-article mark[data-bias-key="selection"]         { background-color: #d1fae5; border-bottom-color: #10b981; }
+            .highlighted-article mark[data-bias-key="sensationalism"]    { background-color: #fee2e2; border-bottom-color: #ef4444; }
+            .highlighted-article mark[data-bias-key="false_balance"]     { background-color: #e0f2fe; border-bottom-color: #0ea5e9; }
+            .highlighted-article mark[data-bias-key="omission"]          { background-color: #f3f4f6; border-bottom-color: #6b7280; }
+            .highlighted-article mark[data-bias-key="ingroup_outgroup"]  { background-color: #fdf4ff; border-bottom-color: #a855f7; }
+            .highlighted-article mark:hover { filter: brightness(0.93); }
+            .highlighted-article mark.active-mark { outline: 2px solid currentColor; filter: brightness(0.9); }
           `}</style>
 
           {/* Relative container so tooltip is positioned inside it */}
@@ -436,46 +460,56 @@ const ResultView: React.FC<ResultViewProps> = ({ result, onClose }) => {
             />
 
             {/* ── Tooltip ─────────────────────────────────────────── */}
-            {tooltip && (
-              <div
-                ref={tooltipRef}
-                className="absolute z-50 bg-white border border-[#e8e4de] shadow-lg p-4 w-80"
-                style={{ top: tooltip.y, left: tooltip.x }}
-                onClick={e => e.stopPropagation()}
-              >
-                {/* Close */}
-                <button
-                  onClick={() => setTooltip(null)}
-                  className="absolute top-2 right-3 text-[#bbb] hover:text-[#555] text-xs"
-                >✕</button>
+            {tooltip && (() => {
+              const tc = getBiasColor(tooltip.biasKey);
+              return (
+                <div
+                  ref={tooltipRef}
+                  className="absolute z-50 bg-white shadow-lg p-4 w-80"
+                  style={{
+                    top: tooltip.y, left: tooltip.x,
+                    border: `1px solid ${tc.border}`,
+                    borderLeft: `4px solid ${tc.border}`,
+                  }}
+                  onClick={e => e.stopPropagation()}
+                >
+                  {/* Close */}
+                  <button
+                    onClick={() => setTooltip(null)}
+                    className="absolute top-2 right-3 text-[#bbb] hover:text-[#555] text-xs"
+                  >✕</button>
 
-                {/* Bias type badge */}
-                {tooltip.biasType && (
-                  <p style={serif} className="text-[10px] font-bold uppercase tracking-widest text-[#aaa] mb-2">
-                    {tooltip.biasType}
-                  </p>
-                )}
+                  {/* Bias type badge */}
+                  {tooltip.biasType && (
+                    <span
+                      style={{ ...serif, backgroundColor: tc.bg, color: tc.text, border: `1px solid ${tc.border}` }}
+                      className="inline-block text-[9px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded mb-2"
+                    >
+                      {tooltip.biasType}
+                    </span>
+                  )}
 
-                {/* The phrase itself */}
-                <p style={serif} className="text-[12px] font-semibold italic text-[#1a1a1a] mb-2 leading-snug">
-                  "{tooltip.phrase}"
-                </p>
+                  {/* Explanation */}
+                  {tooltip.explanation && (
+                    <p style={serif} className="text-[12px] text-[#555] mb-2 leading-snug">
+                      {tooltip.explanation}
+                    </p>
+                  )}
 
-                {/* Explanation */}
-                {tooltip.explanation && (
-                  <p style={serif} className="text-[12px] text-[#555] mb-2 leading-snug">
-                    {tooltip.explanation}
-                  </p>
-                )}
-
-                {/* Neutral alternative */}
-                {tooltip.neutral && (
-                  <p style={serif} className="text-[11px] text-[#16a34a] border-t border-[#e8e4de] pt-2 mt-2">
-                    → {tooltip.neutral}
-                  </p>
-                )}
-              </div>
-            )}
+                  {/* Neutral alternative */}
+                  {tooltip.neutral && (
+                    <div className="border-t border-[#e8e4de] pt-2 mt-2">
+                      <p style={serif} className="text-[9px] font-bold uppercase tracking-widest text-[#16a34a] mb-1">
+                        Suggested alternative
+                      </p>
+                      <p style={serif} className="text-[12px] text-[#16a34a] leading-snug">
+                        {tooltip.neutral}
+                      </p>
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
           </div>
           )}
         </div>

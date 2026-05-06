@@ -4,12 +4,12 @@ import { fetchHistory, deleteAnalysis, checkBackendConnection } from './services
 import ArticleAnalyzer from './components/ArticleAnalyzer';
 import HistoryList from './components/HistoryList';
 import ResultView from './components/ResultView';
-import StatsView from './components/StatsView';
+import AboutView from './components/AboutView';
 
 const App: React.FC = () => {
   const [history, setHistory]               = useState<AnalysisResult[]>([]);
   const [selectedResult, setSelectedResult] = useState<AnalysisResult | null>(null);
-  const [view, setView]                     = useState<'home' | 'stats'>('home');
+  const [view, setView]                     = useState<'home' | 'about'>('home');
   const [isBackendOnline, setIsBackendOnline] = useState(false);
 
   useEffect(() => {
@@ -97,7 +97,7 @@ const App: React.FC = () => {
           <nav className="flex items-center gap-1 pb-1">
             {([
               { key: 'home',  label: 'Analyse' },
-              { key: 'stats', label: 'Results' },
+              { key: 'about', label: 'About' },
             ] as const).map(({ key, label }) => (
               <button
                 key={key}
@@ -187,9 +187,8 @@ const App: React.FC = () => {
           </div>
         )}
 
-
-        {view === 'stats' && (
-          <StatsView />
+        {view === 'about' && (
+          <AboutView />
         )}
 
       </main>

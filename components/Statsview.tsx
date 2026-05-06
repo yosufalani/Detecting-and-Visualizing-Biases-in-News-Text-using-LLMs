@@ -99,9 +99,6 @@ const StatsView: React.FC = () => {
       {/* ── Header ─────────────────────────────────────────────── */}
       <div className="border-b-2 border-[#1a1a1a] pb-4">
         <h2 style={serif} className="text-2xl font-bold text-[#1a1a1a]">Aggregated Results</h2>
-        <p style={serif} className="text-[12px] text-[#888] italic mt-1">
-          Statistics across all analysed articles — for thesis Chapter 4
-        </p>
       </div>
 
       {loadingStats && (

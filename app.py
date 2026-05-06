@@ -971,14 +971,36 @@ def delete_analysis(id):
 @app.route('/api/evaluate', methods=['GET'])
 def evaluate_ground_truth():
     """
-    Runs all annotated ground truth articles through BOTH Gemini and Claude
-    on the framing prompt. Returns JSON summary + per-article results.
-    Use /api/evaluate/csv to download the full results as a CSV file.
+    Compares ground truth human scores against AI results already in the database.
+    Does NOT re-run any AI analysis — reads from DB only.
     """
     try:
         from ground_truth import GROUND_TRUTH, get_consensus_score
     except ImportError:
         return jsonify({"error": "ground_truth.py not found."}), 404
+
+    # Load all DB results keyed by (title_lower[:80], model_lower)
+    # Also try matching by fullText snippet for robustness
+    db_results = {}
+    db_text_results = {}
+    try:
+        conn = sqlite3.connect(DB_NAME)
+        cur = conn.cursor()
+        cur.execute("SELECT title, framingScore, confidence, modelUsed, fullText FROM analysis")
+        for title, framing, conf, model, full_text in cur.fetchall():
+            model_key = (model or "").strip().lower()
+            if title:
+                key = (title.strip().lower()[:80], model_key)
+                if key not in db_results:
+                    db_results[key] = {"score": framing, "confidence": conf}
+            # Also index by first 80 chars of article text
+            if full_text:
+                text_key = (full_text.strip().lower()[:80], model_key)
+                if text_key not in db_text_results:
+                    db_text_results[text_key] = {"score": framing, "confidence": conf}
+        conn.close()
+    except Exception as e:
+        return jsonify({"error": f"DB read failed: {str(e)}"}), 500
 
     results = []
     for article in GROUND_TRUTH:
@@ -989,47 +1011,48 @@ def evaluate_ground_truth():
             continue
 
         row = {
-            "id":           article["id"],
-            "title":        article["title"],
-            "source":       article.get("source", ""),
-            "topic":        article.get("topic", ""),
-            "human_score":  human_score,
-            "annotator_1":  article["human_scores"]["political_framing"].get("annotator_1"),
-            "annotator_2":  article["human_scores"]["political_framing"].get("annotator_2"),
-            "human_notes":  article["human_scores"]["political_framing"].get("notes", ""),
+            "id":          article["id"],
+            "title":       article["title"],
+            "source":      article.get("source", ""),
+            "topic":       article.get("topic", ""),
+            "human_score": human_score,
+            "annotator_1": article["human_scores"]["political_framing"].get("annotator_1"),
+            "annotator_2": article["human_scores"]["political_framing"].get("annotator_2"),
+            "human_notes": article["human_scores"]["political_framing"].get("notes", ""),
         }
 
-        # Run Gemini
-        try:
-            g = run_single_prompt("framing", article["title"], article["text"], model="gemini")
-            row["gemini_score"]      = g.get("score") or 0
-            row["gemini_confidence"] = g.get("confidence", 0)
-            row["gemini_reasoning"]  = g.get("reasoning", "")
-            row["gemini_diff"]       = abs(human_score - row["gemini_score"])
+        title_key = article["title"].strip().lower()[:80]
+        text_key  = article.get("text", "").strip().lower()[:80]
+
+        # Gemini from DB — try title first, then text snippet
+        g = db_results.get((title_key, "gemini")) or db_text_results.get((text_key, "gemini"))
+        if g and g["score"] is not None:
+            raw = g["score"]
+            score5 = round(raw / 2, 1) if raw > 5 else raw
+            row["gemini_score"]      = score5
+            row["gemini_confidence"] = g["confidence"] or 0
+            row["gemini_diff"]       = round(abs(human_score - score5), 2)
             row["gemini_exact"]      = row["gemini_diff"] == 0
             row["gemini_within_1"]   = row["gemini_diff"] <= 1
-            time.sleep(1)
-        except Exception as e:
+        else:
             row["gemini_score"] = None
-            row["gemini_error"] = str(e)
 
-        # Run Claude
-        try:
-            c = run_single_prompt("framing", article["title"], article["text"], model="claude")
-            row["claude_score"]      = c.get("score") or 0
-            row["claude_confidence"] = c.get("confidence", 0)
-            row["claude_reasoning"]  = c.get("reasoning", "")
-            row["claude_diff"]       = abs(human_score - row["claude_score"])
+        # Claude from DB — try title first, then text snippet
+        c_res = db_results.get((title_key, "claude")) or db_text_results.get((text_key, "claude"))
+        if c_res and c_res["score"] is not None:
+            raw = c_res["score"]
+            score5 = round(raw / 2, 1) if raw > 5 else raw
+            row["claude_score"]      = score5
+            row["claude_confidence"] = c_res["confidence"] or 0
+            row["claude_diff"]       = round(abs(human_score - score5), 2)
             row["claude_exact"]      = row["claude_diff"] == 0
             row["claude_within_1"]   = row["claude_diff"] <= 1
-            time.sleep(1)
-        except Exception as e:
+        else:
             row["claude_score"] = None
-            row["claude_error"] = str(e)
 
         # Model agreement
         if row.get("gemini_score") is not None and row.get("claude_score") is not None:
-            row["model_agreement_diff"] = abs(row["gemini_score"] - row["claude_score"])
+            row["model_agreement_diff"] = round(abs(row["gemini_score"] - row["claude_score"]), 2)
             row["models_agree"]         = row["model_agreement_diff"] <= 1
         else:
             row["model_agreement_diff"] = None
@@ -1249,6 +1272,38 @@ def get_stats():
 # -------------------------
 # RUN SERVER
 # -------------------------
+
+
+
+@app.route('/api/db_check_all', methods=['GET'])
+def db_check_all():
+    conn = sqlite3.connect(DB_NAME)
+    cur = conn.cursor()
+    cur.execute("SELECT title, framingScore, confidence, modelUsed FROM analysis")
+    rows = cur.fetchall()
+    conn.close()
+    result = [{"title": r[0], "framingScore": r[1], "confidence": r[2], "modelUsed": r[3]} for r in rows]
+    return jsonify({"count": len(result), "rows": result})
+
+
+@app.route('/api/db_check', methods=['GET'])
+def db_check():
+    conn = sqlite3.connect(DB_NAME)
+    cur = conn.cursor()
+    cur.execute("SELECT title, framingScore, confidence, modelUsed, substr(fullText,1,50) FROM analysis LIMIT 20")
+    rows = cur.fetchall()
+    conn.close()
+    result = []
+    for r in rows:
+        result.append({
+            "title": r[0],
+            "framingScore": r[1],
+            "confidence": r[2],
+            "modelUsed": r[3],
+            "textPreview": r[4]
+        })
+    return jsonify({"count": len(result), "rows": result})
+
 
 if __name__ == '__main__':
     print("🚀 VeriBias Server running on http://localhost:5000")
