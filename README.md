@@ -8,7 +8,7 @@ Bachelor's Thesis · University of Stavanger · 2026
 
 ## Overview
 
-VeriBias is a full-stack web application that detects and visualises political framing bias and cognitive bias in English-language news articles using large language models (LLMs). The system sends each article through eleven structured prompts — one per bias type — and returns phrase-level evidence, explanations, and neutral rewrite suggestions for every detected bias.
+VeriBias is a full-stack web application that detects and visualises ten bias and places them in a left-center-right political framing bias scale in English-language news articles using large language models (LLMs). The system sends each article through eleven structured prompts — one per bias type — and returns phrase-level evidence, explanations, and neutral rewrite suggestions for every detected bias.
 
 Two models are supported and can be compared side by side: **Google Gemini 2.5 Flash** and **Anthropic Claude Sonnet 4.6**. Both are queried with identical prompts at temperature = 0.0.
 
