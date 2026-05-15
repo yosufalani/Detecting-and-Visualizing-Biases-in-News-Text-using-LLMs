@@ -1306,5 +1306,5 @@ def db_check():
 
 
 if __name__ == '__main__':
-    print("🚀 VeriBias Server running on http://localhost:5000")
+    print(" VeriBias Server running on http://localhost:5000")
     app.run(debug=True, port=5000)
