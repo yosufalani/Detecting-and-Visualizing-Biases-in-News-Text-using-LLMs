@@ -1,0 +1,7 @@
+question,result,notes
+Did the highlighted text spans help you understand possible bias?,Yes 15/15,Highlights made the model output concrete and connected it to the article text
+Were the explanations clear?,Mostly yes but mixed,Several participants wanted simpler explanations
+Did the confidence score make you trust the model more?,Yes 15/15,Confidence increased trust but may also increase risk of over-trust
+Did comparing Gemini and Claude help?,Generally yes,Model agreement and disagreement helped participants inspect the output
+Would you personally use this tool for critical reading?,Yes 4/15,Only a minority would personally use it regularly
+Do you think other people could use this tool for critical reading?,Yes 15/15,All participants believed others could benefit from the tool
