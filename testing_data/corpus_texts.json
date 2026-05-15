@@ -1,0 +1,92 @@
+[
+  {
+    "id": "synthetic_eval_01_city_transport",
+    "topic": "Public transport",
+    "expected_biases": ["Framing Bias", "Selection Bias", "Negativity Bias"],
+    "text": "The city council of Northbridge voted on Tuesday to expand evening bus services on three routes used by students, hospital workers, and restaurant staff. The proposal passed by a narrow majority after months of discussion about cost, accessibility, and traffic congestion. Supporters said the change would help residents who do not own cars and reduce late-night taxi expenses. However, critics warned that the plan could become another expensive public project with uncertain benefits. The council report estimated that the expansion would cost 4.2 million kroner in the first year. The article focused mainly on residents who feared higher municipal fees, while only briefly mentioning that several disability groups and student organizations had supported the proposal. One shop owner said the city was 'throwing money at buses nobody will use,' although the transport agency reported increased demand on the affected routes during the previous year."
+  },
+  {
+    "id": "synthetic_eval_02_school_lunch",
+    "topic": "Education",
+    "expected_biases": ["Sensationalism", "Negativity Bias", "Omission Bias"],
+    "text": "A new school lunch program will begin at five primary schools in Lakeview next month. The pilot project will provide one free warm meal per day and will be evaluated after six months. School officials said the goal is to improve concentration and reduce differences between pupils from different income backgrounds. Some parents welcomed the plan, saying it could make everyday life easier for families. Others questioned whether the municipality should prioritize meals when some classrooms still need repairs. The program has already triggered heated reactions online, with several commenters calling it a 'bureaucratic food experiment' and a 'disaster waiting to happen.' The municipality has not yet published detailed information about supplier selection, allergy procedures, or how food waste will be handled. Despite this, the article described the project as a major test of whether schools can manage basic student welfare without creating new problems."
+  },
+  {
+    "id": "synthetic_eval_03_energy_project",
+    "topic": "Renewable energy",
+    "expected_biases": ["False Balance", "Framing Bias"],
+    "text": "Regional authorities approved an application to build a small wind-energy facility outside Hillford, pending final environmental checks. The project would include eight turbines and is expected to supply electricity to around 9,000 households. Energy planners said the site was chosen because of stable wind conditions and distance from residential areas. Local opponents argued that the turbines could disturb wildlife and reduce the visual quality of the landscape. The article presented both sides as equally supported, although the environmental assessment included six technical reports in favor of limited impact, while the opposition group mainly cited personal observations and concerns. A resident described the project as 'industrializing the hills,' while the company said it would fund habitat monitoring during the first three years of operation. The final decision will be reviewed after the environmental agency completes its remaining field survey."
+  },
+  {
+    "id": "synthetic_eval_04_hospital_waiting_times",
+    "topic": "Healthcare",
+    "expected_biases": ["Anchoring Bias", "Negativity Bias", "Selection Bias"],
+    "text": "The Central Valley Hospital reported that average emergency waiting times decreased from 74 minutes to 61 minutes during the last quarter. Hospital managers said the improvement followed the hiring of additional nurses and changes to triage routines. The article opened by noting that one patient waited nearly five hours on a Saturday night, a case that hospital staff described as unusual and connected to several simultaneous ambulance arrivals. Critics said the hospital still had a long way to go before residents could trust the emergency department. The article included three patient complaints but did not include comments from patients who experienced shorter waiting times after the changes. According to the hospital's public report, waiting times improved in seven of the last eight measured weeks, though staff shortages remain a challenge."
+  },
+  {
+    "id": "synthetic_eval_05_local_election",
+    "topic": "Local politics",
+    "expected_biases": ["Confirmation Bias", "In-group/Out-group Bias", "Framing Bias"],
+    "text": "The local election campaign in Eastport continued on Friday as candidates debated housing, taxes, and youth services. The Renewal Party said it would speed up housing construction by reducing planning delays, while the Community Alliance argued that faster approvals could weaken neighborhood protections. Several residents said they wanted practical solutions rather than party conflict. The article described Renewal supporters as 'residents tired of excuses' and Community Alliance voters as 'defenders of the old system.' It also highlighted comments from two business owners who said the Renewal Party had been right about delays for years. No supporters of the Community Alliance were quoted directly. The article concluded that the debate showed how many ordinary residents were finally recognizing the need for change, although polling showed the two parties remained almost evenly matched."
+  },
+  {
+    "id": "synthetic_eval_06_university_policy",
+    "topic": "University policy",
+    "expected_biases": ["Omission Bias", "Framing Bias", "Attribution Bias"],
+    "text": "Riverton University announced a new rule requiring students to register the use of generative AI tools in major written assignments. The university said the rule was intended to promote transparency and help students understand academic integrity requirements. Student representatives said they supported clear guidance but wanted more examples of acceptable and unacceptable use. The article suggested that the policy was introduced because students had become increasingly careless with academic work. It did not mention that the university had also faced pressure from teachers who wanted consistent assessment rules across departments. One lecturer said the policy was necessary because 'some students no longer understand where assistance ends and cheating begins.' The university will hold information sessions before the rule takes effect next semester."
+  },
+  {
+    "id": "synthetic_eval_07_crime_statistics",
+    "topic": "Crime statistics",
+    "expected_biases": ["Sensationalism", "Negativity Bias", "Anchoring Bias"],
+    "text": "Police in Westhaven published their annual crime statistics on Monday. The report showed a 3 percent increase in reported thefts, a 6 percent decrease in violent incidents, and stable numbers for drug-related offenses. The article began with the headline claim that the city was facing a 'new wave of street crime,' focusing on three theft cases near the central train station. A police spokesperson said the increase in thefts was worth monitoring but did not indicate a crisis. Business owners near the station said they wanted more visible patrols, while youth workers warned against describing the entire city as unsafe. The article repeatedly returned to the image of commuters 'looking over their shoulders,' even though the official report stated that most neighborhoods had unchanged or lower crime levels compared with the previous year."
+  },
+  {
+    "id": "synthetic_eval_08_health_campaign",
+    "topic": "Public health",
+    "expected_biases": ["False Balance", "Omission Bias"],
+    "text": "The Ministry of Health launched a campaign encouraging adults to get seasonal flu vaccines before winter. Health officials said vaccination can reduce severe illness among older people, pregnant women, and people with chronic conditions. The article included comments from one doctor who supported the campaign and one wellness blogger who said natural immunity was being ignored. Both viewpoints were presented as two equally valid interpretations of the medical evidence. The article did not mention that national medical associations and several international health agencies support vaccination for high-risk groups. A ministry spokesperson said the campaign was voluntary and focused on reducing hospital pressure. The wellness blogger argued that people should 'do their own research' before accepting official advice."
+  },
+  {
+    "id": "synthetic_eval_09_housing_development",
+    "topic": "Housing",
+    "expected_biases": ["Selection Bias", "In-group/Out-group Bias", "Framing Bias"],
+    "text": "The city planning committee approved the first stage of a housing development that will add 280 apartments near the old railway area. Officials said the project includes affordable units, bike paths, and a small public park. The developer said construction could begin next spring if final permits are completed on time. The article mainly quoted long-time homeowners who opposed the project and said newcomers would change the character of the neighborhood. One resident said, 'People who just moved here do not understand what this area used to be.' Supporters of the project, including renters and younger residents, were mentioned only briefly. The article described the development as a test of whether the city would protect established communities or open the door to rapid change."
+  },
+  {
+    "id": "synthetic_eval_10_technology_company",
+    "topic": "Technology and employment",
+    "expected_biases": ["Attribution Bias", "Confirmation Bias"],
+    "text": "A software company in Brookfield announced that it will reduce its workforce by 7 percent after lower-than-expected revenue in two international markets. The company said the layoffs were part of a restructuring plan and that affected employees would receive severance support. Industry analysts noted that several firms in the same sector have faced similar pressure from slower customer spending. The article suggested that the layoffs showed how technology companies often overhire during good times and then abandon workers when growth slows. A former employee said management had ignored warnings about unrealistic expansion. The article did not discuss exchange-rate changes or delayed client contracts mentioned in the company's financial statement. It concluded that the case confirmed a broader pattern of irresponsible decision-making in the technology sector."
+  },
+  {
+    "id": "synthetic_eval_11_environment_cleanup",
+    "topic": "Environment",
+    "expected_biases": ["Sensationalism", "Framing Bias", "Negativity Bias"],
+    "text": "Volunteers gathered on Saturday to remove plastic waste from the Riverstone shoreline. Organizers said more than 180 people participated and collected approximately 2.4 tons of waste, including bottles, packaging, and discarded fishing equipment. The cleanup was part of an annual environmental campaign supported by schools, local businesses, and outdoor clubs. The article described the shoreline as 'a warning sign of ecological collapse on the city's doorstep,' although environmental officers said pollution levels in the river had improved slightly over the past five years. Several volunteers said the event made them more aware of everyday waste. City officials said they would install additional bins and signs near popular picnic areas. The article ended by warning that without urgent behavioral change, the river could become a symbol of public failure."
+  },
+  {
+    "id": "synthetic_eval_12_tax_reform",
+    "topic": "Tax policy",
+    "expected_biases": ["Anchoring Bias", "False Balance", "Selection Bias"],
+    "text": "The finance committee released a proposal to adjust local property taxes next year. Under the proposal, the average homeowner would pay around 320 kroner more annually, while low-income pensioners could apply for partial relief. The article opened by stating that some families could face bills 'as high as 2,400 kroner,' referring to a small group of high-value properties. Supporters said the revenue would fund road maintenance and elder care services. Opponents said the increase would add pressure to household budgets. The article quoted two anti-tax campaigners and one committee member, but did not include comments from elder care organizations that had requested additional funding. A local economist said the proposal was modest compared with neighboring municipalities, while critics called it the beginning of a larger tax burden."
+  },
+  {
+    "id": "synthetic_eval_13_migration_services",
+    "topic": "Migration and integration",
+    "expected_biases": ["In-group/Out-group Bias", "Selection Bias", "Negativity Bias"],
+    "text": "The municipality of Fairlake announced that it will expand language courses and employment counseling for newly arrived refugees. Officials said the goal is to help more participants enter work or education within two years. The article focused on residents who said local services were already stretched and questioned whether newcomers were receiving more support than long-term citizens. One resident said, 'People who have lived here all their lives are being pushed behind the line.' The article briefly mentioned that the program is partly funded by national integration grants, but did not explain how the funding is separated from ordinary municipal services. Refugee participants and employers involved in the program were not interviewed. The article described the decision as another example of the difficult balance between helping outsiders and protecting local residents."
+  },
+  {
+    "id": "synthetic_eval_14_court_sentencing",
+    "topic": "Justice system",
+    "expected_biases": ["Attribution Bias", "Sensationalism", "Framing Bias"],
+    "text": "A district court sentenced a 22-year-old man to 14 months in prison for repeated burglary offenses. The court said the sentence reflected the number of incidents, the financial damage to victims, and the defendant's previous convictions. The defense argued that addiction and unstable housing had contributed to the offenses and requested treatment as part of the sentence. The article described the defendant as a 'career criminal at only 22' and said the case showed how some offenders choose crime despite repeated chances. It included comments from two victims who said they felt unsafe after the burglaries. The article did not include details from the court's discussion of rehabilitation measures. A prosecutor said the sentence was appropriate because the offenses had affected several small businesses."
+  },
+  {
+    "id": "synthetic_eval_15_farming_subsidies",
+    "topic": "Agriculture",
+    "expected_biases": ["Confirmation Bias", "Omission Bias", "False Balance"],
+    "text": "The national agriculture board proposed a temporary subsidy for small farms affected by rising fertilizer and fuel costs. The measure would apply for one year and would be reviewed before renewal. Farmers' groups said the support could help prevent closures in rural districts. Budget watchdogs warned that subsidies can become permanent even when introduced as temporary measures. The article framed the proposal as further evidence that government programs rarely end once they begin. It quoted one farmer who supported the subsidy and one commentator who argued that the market should decide which farms survive. The article did not mention food security concerns, regional employment effects, or the board's estimate that most eligible farms had profit margins below 4 percent. Both the farmer and the commentator were presented as equally representative of the policy debate."
+  }
+]

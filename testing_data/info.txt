@@ -1,0 +1,23 @@
+This is the 15 articles that in addditon to the 50 articles used prior, these are more simplfied than the other 50.
+
+2. Human expected-label table for your thesis
+
+You can use this as a small “manual ground truth” table.
+
+| Article ID                            | Expected bias categories                         | Short human comment |
+|--------------------------------------|--------------------------------------------------|---------------------|
+| synthetic_eval_01_city_transport     | Framing, Selection, Negativity                   | Focuses more on cost fears than accessibility benefits. |
+| synthetic_eval_02_school_lunch       | Sensationalism, Negativity, Omission             | Uses dramatic wording and notes missing implementation details. |
+| synthetic_eval_03_energy_project     | False Balance, Framing                           | Technical reports and personal concerns are presented as equally supported. |
+| synthetic_eval_04_hospital_waiting_times | Anchoring, Negativity, Selection              | Opens with one extreme waiting-time case despite improved averages. |
+| synthetic_eval_05_local_election     | Confirmation, In-group/Out-group, Framing        | One party is framed as practical residents, the other as defenders of the old system. |
+| synthetic_eval_06_university_policy  | Omission, Framing, Attribution                   | Student carelessness is implied as the cause, while teacher/assessment context is missing. |
+| synthetic_eval_07_crime_statistics   | Sensationalism, Negativity, Anchoring            | “New wave of street crime” anchors interpretation despite mixed statistics. |
+| synthetic_eval_08_health_campaign    | False Balance, Omission                          | Medical consensus and blogger opinion are presented too equally. |
+| synthetic_eval_09_housing_development | Selection, In-group/Out-group, Framing          | Long-time homeowners are centered; renters and younger residents are minimized. |
+| synthetic_eval_10_technology_company | Attribution, Confirmation                        | Layoffs are attributed mainly to irresponsible management, confirming a broader narrative. |
+| synthetic_eval_11_environment_cleanup | Sensationalism, Framing, Negativity             | Cleanup is framed as ecological collapse despite improving pollution levels. |
+| synthetic_eval_12_tax_reform         | Anchoring, False Balance, Selection              | Opens with a high outlier cost and overrepresents anti-tax voices. |
+| synthetic_eval_13_migration_services | In-group/Out-group, Selection, Negativity        | Locals and refugees are framed as competing groups. |
+| synthetic_eval_14_court_sentencing   | Attribution, Sensationalism, Framing             | Defendant is framed as choosing crime, with limited rehabilitation context. |
+| synthetic_eval_15_farming_subsidies  | Confirmation, Omission, False Balance            | Frames proposal as confirming government-program expansion while omitting economic context. |
